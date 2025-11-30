@@ -190,11 +190,120 @@
             opacity: 1;
             color: #00d4aa;
         }
+        
+        /* 移动端触摸控制 */
+        #mobileControls {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 200px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        /* 虚拟摇杆 */
+        #joystickArea {
+            position: absolute;
+            left: 30px;
+            bottom: 30px;
+            width: 140px;
+            height: 140px;
+            pointer-events: auto;
+        }
+        #joystickBase {
+            width: 140px;
+            height: 140px;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            position: relative;
+        }
+        #joystickThumb {
+            width: 60px;
+            height: 60px;
+            background: rgba(255,255,255,0.4);
+            border: 2px solid rgba(255,255,255,0.6);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: background 0.1s;
+        }
+        #joystickThumb.active {
+            background: rgba(0,212,170,0.6);
+        }
+        
+        /* 刹车按钮 */
+        #brakeBtn {
+            position: absolute;
+            right: 30px;
+            bottom: 30px;
+            width: 100px;
+            height: 100px;
+            background: rgba(255,100,100,0.3);
+            border: 3px solid rgba(255,100,100,0.5);
+            border-radius: 50%;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #brakeBtn.active {
+            background: rgba(255,100,100,0.7);
+            border-color: rgba(255,150,150,0.8);
+        }
+        
+        /* 加速按钮 */
+        #gasBtn {
+            position: absolute;
+            right: 150px;
+            bottom: 30px;
+            width: 100px;
+            height: 100px;
+            background: rgba(100,200,100,0.3);
+            border: 3px solid rgba(100,200,100,0.5);
+            border-radius: 50%;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #gasBtn.active {
+            background: rgba(100,200,100,0.7);
+            border-color: rgba(150,255,150,0.8);
+        }
+        
+        /* 移动端适配 */
+        @media (max-width: 768px), (pointer: coarse) {
+            #mobileControls {
+                display: block;
+            }
+            #ui {
+                display: none !important;
+            }
+            #speedometer {
+                transform: scale(0.7);
+                transform-origin: bottom right;
+            }
+        }
     </style>
 </head>
 <body>
-    <div id="loading" class="glass-panel">Loading...</div>
-    <button id="startBtn">START</button>
+    <div id="loading" class="glass-panel" style="display: none;">Loading...</div>
+    <button id="startBtn" style="display: none;">START</button>
     <button id="topViewBtn" style="display: none;" title="俯视图">👁</button>
     <div id="ui" style="display: none;">
         <span class="control-item"><span class="key">W</span><span class="icon">▲</span></span>
@@ -202,6 +311,17 @@
         <span class="control-item"><span class="key">A</span><span class="icon">◀</span></span>
         <span class="control-item"><span class="key">D</span><span class="icon">▶</span></span>
         <span class="control-item"><span class="key">Space</span><span class="icon">⏸</span></span>
+    </div>
+    
+    <!-- 移动端控制 -->
+    <div id="mobileControls">
+        <div id="joystickArea">
+            <div id="joystickBase">
+                <div id="joystickThumb"></div>
+            </div>
+        </div>
+        <div id="gasBtn">GO</div>
+        <div id="brakeBtn">STOP</div>
     </div>
     <div id="speedometer" style="display: none;">
         <svg viewBox="0 0 200 200">
@@ -437,21 +557,21 @@
             // 设置事件监听
             setupEventListeners();
 
-            // 隐藏加载提示，显示启动按钮
+            // 隐藏加载提示，直接显示UI
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('startBtn').style.display = 'block';
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('ui').style.display = 'block';
+            document.getElementById('speedometer').style.display = 'block';
+            document.getElementById('topViewBtn').style.display = 'block';
             
-            // 启动按钮点击事件
-            document.getElementById('startBtn').addEventListener('click', () => {
-                // 初始化音效系统（需要用户交互）
+            // 音效系统需要用户交互才能启动，监听第一次交互
+            const startAudio = () => {
                 initAudioSystem();
-                
-                // 隐藏启动按钮，显示UI
-                document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('ui').style.display = 'block';
-                document.getElementById('speedometer').style.display = 'block';
-                document.getElementById('topViewBtn').style.display = 'block';
-            });
+                document.removeEventListener('click', startAudio);
+                document.removeEventListener('keydown', startAudio);
+            };
+            document.addEventListener('click', startAudio);
+            document.addEventListener('keydown', startAudio);
             
             // 俯视图按钮点击事件
             document.getElementById('topViewBtn').addEventListener('click', () => {
@@ -977,7 +1097,9 @@
                 material: new CANNON.Material('chassis')
             });
             chassisBody.addShape(chassisShape);
-            chassisBody.position.set(0, 4, 0);
+            // 初始位置在乾卦广告牌附近的道路上（西北方向）
+            chassisBody.position.set(-127, 1, -127);
+            chassisBody.quaternion.setFromEuler(0, Math.PI * 0.75, 0); // 车头朝向道路方向
 
             // ---- 创建RaycastVehicle ----
             vehicle = new CANNON.RaycastVehicle({
@@ -2273,20 +2395,37 @@
             return texture;
         }
         
+        // 重置粒子到车辆周围
+        function resetParticlesAroundCar() {
+            if (!weatherParticles || !weatherParticles.geometry) return;
+            const positions = weatherParticles.geometry.attributes.position.array;
+            const settled = weatherParticles.geometry.userData.settled;
+            const carPos = chassisBody ? { x: chassisBody.position.x, z: chassisBody.position.z } : { x: 0, z: 0 };
+            
+            for (let i = 0; i < settled.length; i++) {
+                settled[i] = 0;
+                // 将粒子分布在车辆周围，从天空到地面均匀分布
+                positions[i * 3] = carPos.x + (Math.random() - 0.5) * 120;
+                positions[i * 3 + 1] = Math.random() * 80;
+                positions[i * 3 + 2] = carPos.z + (Math.random() - 0.5) * 120;
+            }
+            weatherParticles.geometry.attributes.position.needsUpdate = true;
+        }
+        
         function initWeatherSystem() {
             // 创建雪花纹理
             snowflakeTexture = createSnowflakeTexture();
             
-            // 创建粒子系统用于雨雪
-            const particleCount = 5000;
+            // 创建粒子系统用于雨雪（密集但优化性能）
+            const particleCount = 10000;
             const positions = new Float32Array(particleCount * 3);
             const velocities = new Float32Array(particleCount * 3);
             const settled = new Float32Array(particleCount); // 是否已落地
             
             for (let i = 0; i < particleCount; i++) {
-                positions[i * 3] = (Math.random() - 0.5) * 200;
+                positions[i * 3] = (Math.random() - 0.5) * 180;
                 positions[i * 3 + 1] = Math.random() * 100;
-                positions[i * 3 + 2] = (Math.random() - 0.5) * 200;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 180;
                 
                 velocities[i * 3] = 0;
                 velocities[i * 3 + 1] = -1;
@@ -2303,7 +2442,8 @@
                 color: 0xaaaaaa,
                 size: 0.2,
                 transparent: true,
-                opacity: 0.6
+                opacity: 0.6,
+                depthWrite: false  // 避免透明粒子影响深度缓冲
             });
             
             weatherParticles = new THREE.Points(geometry, material);
@@ -2356,11 +2496,49 @@
             sunMesh.position.set(200, 150, -100);
             scene.add(sunMesh);
             
-            // 月亮
-            const moonGeo = new THREE.SphereGeometry(10, 32, 32);
-            const moonMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+            // 弯月（使用canvas绘制）
+            const moonCanvas = document.createElement('canvas');
+            moonCanvas.width = 128;
+            moonCanvas.height = 128;
+            const moonCtx = moonCanvas.getContext('2d');
+            
+            // 绘制弯月
+            moonCtx.clearRect(0, 0, 128, 128);
+            // 先画一个完整的月亮
+            moonCtx.beginPath();
+            moonCtx.arc(64, 64, 50, 0, Math.PI * 2);
+            moonCtx.fillStyle = '#fffde7';
+            moonCtx.fill();
+            // 用深色圆遮挡一部分形成弯月
+            moonCtx.beginPath();
+            moonCtx.arc(85, 64, 45, 0, Math.PI * 2);
+            moonCtx.fillStyle = 'rgba(0,0,0,1)';
+            moonCtx.globalCompositeOperation = 'destination-out';
+            moonCtx.fill();
+            moonCtx.globalCompositeOperation = 'source-over';
+            
+            // 添加月亮光晕
+            const glowCanvas = document.createElement('canvas');
+            glowCanvas.width = 128;
+            glowCanvas.height = 128;
+            const glowCtx = glowCanvas.getContext('2d');
+            const gradient = glowCtx.createRadialGradient(64, 64, 20, 64, 64, 64);
+            gradient.addColorStop(0, 'rgba(255, 253, 230, 0.4)');
+            gradient.addColorStop(1, 'rgba(255, 253, 230, 0)');
+            glowCtx.fillStyle = gradient;
+            glowCtx.fillRect(0, 0, 128, 128);
+            glowCtx.drawImage(moonCanvas, 0, 0);
+            
+            const moonTexture = new THREE.CanvasTexture(glowCanvas);
+            const moonGeo = new THREE.PlaneGeometry(30, 30);
+            const moonMat = new THREE.MeshBasicMaterial({ 
+                map: moonTexture, 
+                transparent: true,
+                side: THREE.DoubleSide
+            });
             moonMesh = new THREE.Mesh(moonGeo, moonMat);
-            moonMesh.position.set(-150, 120, -80);
+            moonMesh.position.set(-150, 130, -100);
+            moonMesh.lookAt(0, 130, 0);
             moonMesh.visible = false;
             scene.add(moonMesh);
             
@@ -2460,16 +2638,24 @@
                 if (ground && ground.material) {
                     ground.material.color.setHex(0x2d5a27); // 恢复绿色
                 }
-                // 重置雪花落地状态
-                if (weatherParticles && weatherParticles.geometry.userData.settled) {
+                // 重置雪花落地状态和粒子位置
+                if (weatherParticles && weatherParticles.geometry) {
+                    const positions = weatherParticles.geometry.attributes.position.array;
                     const settled = weatherParticles.geometry.userData.settled;
                     for (let i = 0; i < settled.length; i++) {
                         settled[i] = 0;
+                        // 将所有粒子重置到天空（足够高以避免可见）
+                        positions[i * 3] = (Math.random() - 0.5) * 180;
+                        positions[i * 3 + 1] = 200 + Math.random() * 100; // 更高的位置
+                        positions[i * 3 + 2] = (Math.random() - 0.5) * 180;
                     }
+                    weatherParticles.geometry.attributes.position.needsUpdate = true;
                 }
-                // 移除雪花纹理
+                // 移除雪花纹理并重置材质
                 if (weatherParticles && weatherParticles.material) {
                     weatherParticles.material.map = null;
+                    weatherParticles.material.alphaTest = 0;  // 重置 alphaTest
+                    weatherParticles.material.opacity = 0.6;
                     weatherParticles.material.needsUpdate = true;
                 }
             }
@@ -2507,6 +2693,8 @@
                     weatherParticles.visible = true;
                     weatherParticles.material.color.setHex(0x8888ff);
                     weatherParticles.material.size = 0.15;
+                    // 重置粒子到车辆周围
+                    resetParticlesAroundCar();
                     if (cloudsGroup) {
                         cloudsGroup.visible = true;
                         cloudsGroup.children.forEach(c => c.children.forEach(p => {
@@ -2548,6 +2736,8 @@
                     weatherParticles.visible = true;
                     weatherParticles.material.color.setHex(0x6666aa);
                     weatherParticles.material.size = 0.2;
+                    // 重置粒子到车辆周围
+                    resetParticlesAroundCar();
                     if (cloudsGroup) {
                         cloudsGroup.visible = true;
                         cloudsGroup.children.forEach(c => c.children.forEach(p => {
@@ -2586,14 +2776,14 @@
             for (let i = 0; i < positions.length; i += 3) {
                 const idx = i / 3;
                 
-                // 如果雪花已落地，逐渐消失后重置
+                // 如果雪花已落地，快速重置
                 if (currentWeather === 'snow' && settled[idx] > 0) {
                     settled[idx] += deltaTime;
-                    // 3秒后重置到天上
-                    if (settled[idx] > 3) {
-                        positions[i] = carPos.x + (Math.random() - 0.5) * 150;
-                        positions[i + 1] = 80 + Math.random() * 20;
-                        positions[i + 2] = carPos.z + (Math.random() - 0.5) * 150;
+                    // 1秒后重置到天上（更快的循环）
+                    if (settled[idx] > 1) {
+                        positions[i] = carPos.x + (Math.random() - 0.5) * 120;
+                        positions[i + 1] = 60 + Math.random() * 40;
+                        positions[i + 2] = carPos.z + (Math.random() - 0.5) * 120;
                         settled[idx] = 0;
                     }
                     continue;
@@ -2622,10 +2812,10 @@
                             }
                         }
                     } else {
-                        // 雨水重置到顶部
-                        positions[i] = carPos.x + (Math.random() - 0.5) * 150;
-                        positions[i + 1] = 80 + Math.random() * 20;
-                        positions[i + 2] = carPos.z + (Math.random() - 0.5) * 150;
+                        // 雨水重置到顶部（更密集的范围）
+                        positions[i] = carPos.x + (Math.random() - 0.5) * 120;
+                        positions[i + 1] = 60 + Math.random() * 40;
+                        positions[i + 2] = carPos.z + (Math.random() - 0.5) * 120;
                     }
                 }
             }
@@ -2857,6 +3047,121 @@
                 cameraDistance += e.deltaY * 0.01;
                 cameraDistance = Math.max(5, Math.min(25, cameraDistance));
                 e.preventDefault();
+            }, { passive: false });
+            
+            // === 移动端触摸控制 ===
+            setupMobileControls();
+        }
+        
+        // 移动端控制设置
+        function setupMobileControls() {
+            const joystickArea = document.getElementById('joystickArea');
+            const joystickThumb = document.getElementById('joystickThumb');
+            const gasBtn = document.getElementById('gasBtn');
+            const brakeBtn = document.getElementById('brakeBtn');
+            
+            if (!joystickArea) return;
+            
+            let joystickActive = false;
+            let joystickStartX = 0;
+            let joystickStartY = 0;
+            const joystickRadius = 40; // 摇杆移动范围
+            
+            // 摇杆触摸开始
+            joystickArea.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                joystickActive = true;
+                joystickThumb.classList.add('active');
+                const touch = e.touches[0];
+                const rect = joystickArea.getBoundingClientRect();
+                joystickStartX = rect.left + rect.width / 2;
+                joystickStartY = rect.top + rect.height / 2;
+            }, { passive: false });
+            
+            // 摇杆触摸移动
+            window.addEventListener('touchmove', (e) => {
+                if (!joystickActive) return;
+                
+                const touch = e.touches[0];
+                let deltaX = touch.clientX - joystickStartX;
+                let deltaY = touch.clientY - joystickStartY;
+                
+                // 限制摇杆范围
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                if (distance > joystickRadius) {
+                    deltaX = (deltaX / distance) * joystickRadius;
+                    deltaY = (deltaY / distance) * joystickRadius;
+                }
+                
+                // 更新摇杆位置
+                joystickThumb.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+                
+                // 计算方向输入（归一化到 -1 到 1）
+                const normalX = deltaX / joystickRadius;
+                const normalY = deltaY / joystickRadius;
+                
+                // 左右转向
+                controls.left = normalX < -0.3;
+                controls.right = normalX > 0.3;
+                
+                // 前后移动
+                controls.forward = normalY < -0.3;
+                controls.backward = normalY > 0.3;
+            }, { passive: false });
+            
+            // 摇杆触摸结束
+            window.addEventListener('touchend', (e) => {
+                // 检查是否还有触摸点在摇杆上
+                let stillTouching = false;
+                for (let touch of e.touches) {
+                    const rect = joystickArea.getBoundingClientRect();
+                    if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
+                        touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+                        stillTouching = true;
+                        break;
+                    }
+                }
+                
+                if (!stillTouching && joystickActive) {
+                    joystickActive = false;
+                    joystickThumb.classList.remove('active');
+                    joystickThumb.style.transform = 'translate(-50%, -50%)';
+                    controls.forward = false;
+                    controls.backward = false;
+                    controls.left = false;
+                    controls.right = false;
+                }
+            });
+            
+            // 加速按钮
+            gasBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                controls.forward = true;
+                gasBtn.classList.add('active');
+            }, { passive: false });
+            
+            gasBtn.addEventListener('touchend', (e) => {
+                controls.forward = false;
+                gasBtn.classList.remove('active');
+            });
+            
+            // 刹车按钮
+            brakeBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                controls.brake = true;
+                brakeBtn.classList.add('active');
+            }, { passive: false });
+            
+            brakeBtn.addEventListener('touchend', (e) => {
+                controls.brake = false;
+                brakeBtn.classList.remove('active');
+            });
+            
+            // 阻止默认触摸行为（防止页面滚动）
+            document.addEventListener('touchmove', (e) => {
+                if (e.target.closest('#mobileControls')) {
+                    e.preventDefault();
+                }
             }, { passive: false });
         }
 
