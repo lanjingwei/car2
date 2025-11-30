@@ -1,0 +1,3292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 汽车驾驶模拟器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            font-family: 'SF Pro Display', 'Helvetica Neue', 'Microsoft YaHei', sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        
+        /* 高奢极简半透明设计 */
+        .glass-panel {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        /* 控制提示UI - 极简水平设计 */
+        #ui {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            color: rgba(255,255,255,0.6);
+            display: flex;
+            gap: 8px;
+            font-size: 12px;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            backdrop-filter: none;
+            padding: 0;
+        }
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0.6;
+        }
+        .key {
+            font-size: 11px;
+            font-weight: 400;
+            opacity: 0.8;
+        }
+        .icon {
+            font-size: 10px;
+            opacity: 0.5;
+        }
+        
+        /* 圆形速度仪表盘 */
+        #speedometer {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            width: 200px;
+            height: 200px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        #speedometer svg {
+            width: 100%;
+            height: 100%;
+        }
+        .speed-text {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+        }
+        .speed-value {
+            font-size: 28px;
+            font-weight: 300;
+            letter-spacing: -1px;
+        }
+        .speed-unit {
+            font-size: 11px;
+            letter-spacing: 2px;
+            opacity: 0.7;
+            margin-top: 2px;
+        }
+        
+        /* 加载界面 */
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255,255,255,0.9);
+            font-size: 18px;
+            font-weight: 300;
+            padding: 40px 60px;
+            letter-spacing: 3px;
+        }
+        
+        /* 启动按钮 */
+        #startBtn {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 50px;
+            font-size: 16px;
+            font-weight: 400;
+            letter-spacing: 3px;
+            color: rgba(255,255,255,0.9);
+            background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 2000;
+        }
+        #startBtn:hover {
+            background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.1) 100%);
+            transform: translate(-50%, -50%) scale(1.05);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+        }
+        
+        /* 天气UI按钮 - 极简无色图标 */
+        .weather-btn {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            font-size: 18px;
+            color: rgba(255,255,255,0.7);
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            filter: grayscale(100%) brightness(1.5);
+            opacity: 0.7;
+        }
+        .weather-btn:hover {
+            filter: grayscale(0%) brightness(1);
+            opacity: 1;
+            transform: scale(1.15);
+        }
+        .weather-btn:active {
+            transform: scale(0.95);
+        }
+        .weather-btn.active {
+            filter: grayscale(0%) brightness(1);
+            opacity: 1;
+        }
+        
+        /* 俯视图按钮 */
+        #topViewBtn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 36px;
+            height: 36px;
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.6);
+            font-size: 20px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: all 0.2s ease;
+        }
+        #topViewBtn:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        #topViewBtn.active {
+            opacity: 1;
+            color: #00d4aa;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="glass-panel">Loading...</div>
+    <button id="startBtn">START</button>
+    <button id="topViewBtn" style="display: none;" title="俯视图">👁</button>
+    <div id="ui" style="display: none;">
+        <span class="control-item"><span class="key">W</span><span class="icon">▲</span></span>
+        <span class="control-item"><span class="key">S</span><span class="icon">▼</span></span>
+        <span class="control-item"><span class="key">A</span><span class="icon">◀</span></span>
+        <span class="control-item"><span class="key">D</span><span class="icon">▶</span></span>
+        <span class="control-item"><span class="key">Space</span><span class="icon">⏸</span></span>
+    </div>
+    <div id="speedometer" style="display: none;">
+        <svg viewBox="0 0 200 200">
+            <!-- 外圈刻度（青色到红色渐变） -->
+            <defs>
+                <linearGradient id="gaugeGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#00d4aa"/>
+                    <stop offset="60%" style="stop-color:#00b8d4"/>
+                    <stop offset="80%" style="stop-color:#ff6b6b"/>
+                    <stop offset="100%" style="stop-color:#ff4757"/>
+                </linearGradient>
+            </defs>
+            <!-- 背景弧 -->
+            <circle cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8" 
+                stroke-dasharray="400 134" stroke-dashoffset="-67" stroke-linecap="round"/>
+            <!-- 进度弧 -->
+            <circle id="speedArc" cx="100" cy="100" r="85" fill="none" stroke="url(#gaugeGradient)" stroke-width="8" 
+                stroke-dasharray="0 534" stroke-dashoffset="-67" stroke-linecap="round"/>
+            <!-- 刻度数字 -->
+            <text x="30" y="165" fill="rgba(255,255,255,0.6)" font-size="10">0</text>
+            <text x="18" y="120" fill="rgba(255,255,255,0.6)" font-size="10">30</text>
+            <text x="35" y="70" fill="rgba(255,255,255,0.6)" font-size="10">60</text>
+            <text x="95" y="40" fill="rgba(255,255,255,0.6)" font-size="10">90</text>
+            <text x="155" y="70" fill="rgba(255,255,255,0.6)" font-size="10">120</text>
+            <!-- 细刻度线 -->
+            <g stroke="rgba(255,255,255,0.3)" stroke-width="1">
+                <!-- 0-30间的小刻度 -->
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(9, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(18, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(27, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(36, 100, 100)"/>
+                <!-- 30-60间的小刻度 -->
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(54, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(63, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(72, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(81, 100, 100)"/>
+                <!-- 60-90间的小刻度 -->
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(99, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(108, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(117, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(126, 100, 100)"/>
+                <!-- 90-120间的小刻度 -->
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(144, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(153, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(162, 100, 100)"/>
+                <line x1="32" y1="152" x2="38" y2="147" transform="rotate(171, 100, 100)"/>
+            </g>
+            <!-- 主刻度线 -->
+            <g stroke="rgba(255,255,255,0.5)" stroke-width="2">
+                <line x1="30" y1="152" x2="40" y2="145" transform="rotate(0, 100, 100)"/>
+                <line x1="30" y1="152" x2="40" y2="145" transform="rotate(45, 100, 100)"/>
+                <line x1="30" y1="152" x2="40" y2="145" transform="rotate(90, 100, 100)"/>
+                <line x1="30" y1="152" x2="40" y2="145" transform="rotate(135, 100, 100)"/>
+                <line x1="30" y1="152" x2="40" y2="145" transform="rotate(180, 100, 100)"/>
+            </g>
+            <!-- 指针 -->
+            <line id="speedNeedle" x1="100" y1="100" x2="100" y2="35" 
+                stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round"
+                transform="rotate(-135, 100, 100)"/>
+            <!-- 中心圆点 -->
+            <circle cx="100" cy="100" r="6" fill="rgba(255,255,255,0.3)"/>
+        </svg>
+        <div class="speed-text">
+            <div id="speedValue" class="speed-value">0</div>
+            <div class="speed-unit">km/h</div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+        // ============================================
+        // 全局变量
+        // ============================================
+        let scene, camera, renderer;
+        let world;
+        let vehicle, chassisBody;
+        let clock;
+        let envMap; // 环境贴图（用于反射）
+        let carModel = null; // 外部加载的车辆模型
+        let gltfLoader; // GLTF加载器
+        let ferrariWheels = []; // Ferrari模型的轮子
+        
+        // 外部环境模型缓存
+        const envModels = {
+            tree: null,
+            house: null,
+            building: null
+        };
+        let modelsLoaded = false;
+
+        // 音效系统
+        let audioContext = null;
+        const sounds = {
+            engine: null,
+            brake: null,
+            reverse: null
+        };
+        let engineGain = null;
+        let engineOscillator = null;
+        let engineRunning = false;
+        let audioInitialized = false;
+        let isBrakingSoundPlaying = false;
+
+        // 天气系统
+        let currentWeather = 'sunny';
+        let weatherParticles = null;
+        let rainSound = null;
+        let lightningTimer = 0;
+        let snowAccumulation = 0; // 积雪量
+        let groundSnowMeshes = []; // 地面积雪
+        let snowflakeTexture = null; // 雪花纹理
+        let isTopView = false; // 俯视图模式
+        
+        // 控制状态
+        const controls = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            brake: false
+        };
+
+        // 车辆参数（优化后的配置 - 超稳底盘）
+        const vehicleConfig = {
+            maxSteerVal: 0.45,
+            maxForce: 800,
+            brakeForce: 60,
+            chassisMass: 500,
+            wheelRadius: 0.35,
+            wheelWidth: 0.25,
+            suspensionStiffness: 55,  // 适中悬挂
+            suspensionRestLength: 0.3, // 悬挂长度
+            frictionSlip: 3.5,
+            dampingRelaxation: 3,
+            dampingCompression: 4.5,
+            rollInfluence: 0.0001,
+            maxSpeed: 120
+        };
+
+        // 当前转向值（用于平滑转向）
+        let currentSteerVal = 0;
+        const steerSpeed = 0.05; // 转向平滑速度
+
+        // 相机控制参数（鼠标视角）
+        let cameraAngleH = 0;  // 水平角度（无限制，可360度旋转）
+        let cameraAngleV = 0.4; // 垂直角度
+        let cameraDistance = 12; // 相机距离
+        let isMouseDown = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        // 存储物理和渲染对象的映射
+        const objectsToUpdate = [];
+        const wheelMeshes = [];
+        
+        // 存储树木用于碰撞检测
+        const trees = [];
+        let lastCollisionTime = 0;
+        
+        // 存储湖中的鱼
+        const fishes = [];
+
+        // ============================================
+        // 初始化函数
+        // ============================================
+        async function init() {
+            // 创建场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb); // 天空蓝
+            scene.fog = new THREE.Fog(0x87ceeb, 100, 500);
+
+            // 创建相机
+            camera = new THREE.PerspectiveCamera(
+                60,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            camera.position.set(0, 10, 20);
+
+            // 创建渲染器（支持物理材质）
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            document.body.appendChild(renderer.domElement);
+
+            // 创建时钟
+            clock = new THREE.Clock();
+
+            // 创建环境贴图（用于车漆反射）
+            createEnvironmentMap();
+
+            // 初始化物理世界
+            initPhysics();
+
+            // 添加灯光
+            addLights();
+
+            // 创建地面
+            createGround();
+
+            // 创建车辆
+            createVehicle();
+
+            // 程序化生成地图
+            generateMap();
+
+            // 添加天空盒效果
+            addSkyDome();
+
+            // 初始化天气系统
+            initWeatherSystem();
+
+            // 设置事件监听
+            setupEventListeners();
+
+            // 隐藏加载提示，显示启动按钮
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('startBtn').style.display = 'block';
+            
+            // 启动按钮点击事件
+            document.getElementById('startBtn').addEventListener('click', () => {
+                // 初始化音效系统（需要用户交互）
+                initAudioSystem();
+                
+                // 隐藏启动按钮，显示UI
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('ui').style.display = 'block';
+                document.getElementById('speedometer').style.display = 'block';
+                document.getElementById('topViewBtn').style.display = 'block';
+            });
+            
+            // 俯视图按钮点击事件
+            document.getElementById('topViewBtn').addEventListener('click', () => {
+                isTopView = !isTopView;
+                document.getElementById('topViewBtn').classList.toggle('active', isTopView);
+            });
+
+            // 开始动画循环
+            animate();
+        }
+
+        // ============================================
+        // 创建环境贴图（用于车漆反射效果）
+        // ============================================
+        function createEnvironmentMap() {
+            // 使用渐变色生成简单的环境贴图
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();
+
+            // 创建简单的环境场景
+            const envScene = new THREE.Scene();
+            
+            // 添加渐变背景
+            const skyColor = new THREE.Color(0x87ceeb);
+            const groundColor = new THREE.Color(0x333333);
+            
+            // 上半球（天空）
+            const skyGeometry = new THREE.SphereGeometry(50, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+            const skyMaterial = new THREE.MeshBasicMaterial({ 
+                color: skyColor, 
+                side: THREE.BackSide 
+            });
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            envScene.add(sky);
+            
+            // 下半球（地面反射）
+            const groundGeometry = new THREE.SphereGeometry(50, 32, 32, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+            const groundMaterial = new THREE.MeshBasicMaterial({ 
+                color: groundColor, 
+                side: THREE.BackSide 
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            envScene.add(ground);
+
+            // 生成环境贴图
+            envMap = pmremGenerator.fromScene(envScene, 0.04).texture;
+            scene.environment = envMap;
+            
+            pmremGenerator.dispose();
+        }
+
+        // ============================================
+        // 物理世界初始化
+        // ============================================
+        function initPhysics() {
+            world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0);
+            world.broadphase = new CANNON.SAPBroadphase(world);
+            world.defaultContactMaterial.friction = 0.3;
+            
+            // 创建地面材质
+            const groundMaterial = new CANNON.Material('ground');
+            const wheelMaterial = new CANNON.Material('wheel');
+            
+            // 轮子与地面的接触材质
+            const wheelGroundContact = new CANNON.ContactMaterial(
+                wheelMaterial,
+                groundMaterial,
+                {
+                    friction: 0.5,
+                    restitution: 0.3,
+                    contactEquationStiffness: 1000
+                }
+            );
+            world.addContactMaterial(wheelGroundContact);
+        }
+
+        // ============================================
+        // 灯光设置
+        // ============================================
+        function addLights() {
+            // 环境光
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            // 方向光（太阳）
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(100, 100, 50);
+            directionalLight.castShadow = true;
+            
+            // 阴影配置
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 500;
+            directionalLight.shadow.camera.left = -150;
+            directionalLight.shadow.camera.right = 150;
+            directionalLight.shadow.camera.top = 150;
+            directionalLight.shadow.camera.bottom = -150;
+            
+            scene.add(directionalLight);
+
+            // 半球光（模拟天空和地面的反射）
+            const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x444444, 0.3);
+            scene.add(hemisphereLight);
+        }
+
+        // ============================================
+        // 创建地面（深绿色草地 + 弯曲道路）
+        // ============================================
+        function createGround() {
+            const groundRadius = 250;
+            
+            // 深绿色草地（圆形）
+            const groundMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2d5a27,
+                roughness: 0.9,
+                metalness: 0.0,
+                side: THREE.DoubleSide
+            });
+            
+            const groundGeometry = new THREE.CircleGeometry(groundRadius, 128);
+            const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+            groundMesh.name = 'ground';
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.receiveShadow = true;
+            scene.add(groundMesh);
+
+            // 创建弯曲道路
+            createCurvedRoad();
+
+            // Cannon.js 地面
+            const groundShape = new CANNON.Plane();
+            const groundBody = new CANNON.Body({
+                mass: 0,
+                material: new CANNON.Material('ground')
+            });
+            groundBody.addShape(groundShape);
+            groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+            world.addBody(groundBody);
+        }
+
+        // 存储道路点用于树木避让
+        let roadPathPoints = [];
+        
+        // 太极图湖泊位置（阴阳鱼眼）
+        const lakePositions = [
+            { x: 0, z: 90, r: 18 },   // 阴极（上方鱼眼）
+            { x: 0, z: -90, r: 18 }   // 阳极（下方鱼眼）
+        ];
+        
+        // 创建太极道路
+        function createCurvedRoad() {
+            const roadWidth = 10;
+            const roadColor = 0x3a3a3a;
+            const lineColor = 0xffffff;
+            const radius = 180;
+            const halfR = radius / 2;
+            
+            // 外圈圆形道路点
+            const outerPoints = [];
+            for (let i = 0; i <= 100; i++) {
+                const angle = (i / 100) * Math.PI * 2;
+                outerPoints.push(new THREE.Vector3(
+                    Math.sin(angle) * radius,
+                    0.02,
+                    -Math.cos(angle) * radius
+                ));
+            }
+            
+            // 太极S形道路：由两个精确半圆组成
+            const sPoints = [];
+            
+            // 上半圆：从顶部(0, radius)到中心(0, 0)，圆心在(0, halfR)
+            for (let i = 0; i <= 40; i++) {
+                const angle = (i / 40) * Math.PI;
+                sPoints.push(new THREE.Vector3(
+                    Math.sin(angle) * halfR,
+                    0.02,
+                    halfR + Math.cos(angle) * halfR
+                ));
+            }
+            
+            // 下半圆：从中心(0, 0)到底部(0, -radius)，圆心在(0, -halfR)
+            for (let i = 1; i <= 40; i++) {
+                const angle = (i / 40) * Math.PI;
+                sPoints.push(new THREE.Vector3(
+                    -Math.sin(angle) * halfR,
+                    0.02,
+                    -halfR + Math.cos(angle) * halfR
+                ));
+            }
+            
+            // 存储所有道路点用于避让
+            roadPathPoints = [...outerPoints, ...sPoints];
+            
+            // 绘制道路的通用函数
+            function drawRoad(points) {
+                for (let i = 0; i < points.length - 1; i++) {
+                    const p1 = points[i];
+                    const p2 = points[i + 1];
+                    
+                    const dir = new THREE.Vector3().subVectors(p2, p1).normalize();
+                    const perp = new THREE.Vector3(-dir.z, 0, dir.x);
+                    const p2Extended = p2.clone().add(dir.clone().multiplyScalar(1.0));
+                    
+                    const v1 = new THREE.Vector3().addVectors(p1, perp.clone().multiplyScalar(roadWidth/2));
+                    const v2 = new THREE.Vector3().addVectors(p1, perp.clone().multiplyScalar(-roadWidth/2));
+                    const v3 = new THREE.Vector3().addVectors(p2Extended, perp.clone().multiplyScalar(-roadWidth/2));
+                    const v4 = new THREE.Vector3().addVectors(p2Extended, perp.clone().multiplyScalar(roadWidth/2));
+                    
+                    const roadGeo = new THREE.BufferGeometry();
+                    const vertices = new Float32Array([
+                        v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z,
+                        v1.x, v1.y, v1.z, v3.x, v3.y, v3.z, v4.x, v4.y, v4.z
+                    ]);
+                    roadGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+                    roadGeo.computeVertexNormals();
+                    
+                    const roadMat = new THREE.MeshStandardMaterial({ 
+                        color: roadColor, roughness: 0.8, side: THREE.DoubleSide
+                    });
+                    const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+                    roadMesh.receiveShadow = true;
+                    scene.add(roadMesh);
+                }
+            }
+            
+            // 绘制两条道路
+            drawRoad(outerPoints);
+            drawRoad(sPoints);
+            
+            // 道路中心虚线
+            function drawDashedLine(points) {
+                const dashLength = 3, gapLength = 3;
+                let accumulated = 0, isDash = true;
+                
+                for (let i = 0; i < points.length - 1; i++) {
+                    const p1 = points[i];
+                    const p2 = points[i + 1];
+                    
+                    if (isDash) {
+                        const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(p1.x, 0.03, p1.z),
+                            new THREE.Vector3(p2.x, 0.03, p2.z)
+                        ]);
+                        scene.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: lineColor })));
+                    }
+                    
+                    accumulated += p1.distanceTo(p2);
+                    if (accumulated > (isDash ? dashLength : gapLength)) {
+                        accumulated = 0;
+                        isDash = !isDash;
+                    }
+                }
+            }
+            
+            drawDashedLine(outerPoints);
+            drawDashedLine(sPoints);
+            
+            // 方案二：只保留虚线，无边线
+            
+            // 创建八卦方位广告牌
+            createBaguaSigns(radius);
+        }
+        
+        // 创建八卦方位广告牌
+        function createBaguaSigns(radius) {
+            // 后天八卦方位（含卦象符号和方位）
+            const bagua = [
+                { name: '坎', symbol: [0,1,0], dir: '北', angle: 0 },
+                { name: '艮', symbol: [1,0,0], dir: '东北', angle: 45 },
+                { name: '震', symbol: [0,0,1], dir: '东', angle: 90 },
+                { name: '巽', symbol: [1,1,0], dir: '东南', angle: 135 },
+                { name: '离', symbol: [1,0,1], dir: '南', angle: 180 },
+                { name: '坤', symbol: [0,0,0], dir: '西南', angle: 225 },
+                { name: '兑', symbol: [0,1,1], dir: '西', angle: 270 },
+                { name: '乾', symbol: [1,1,1], dir: '西北', angle: 315 }
+            ];
+            
+            const signDistance = radius + 20;
+            const poleHeight = 12;
+            const panelWidth = 18;
+            const panelHeight = 8;
+            const poleSpacing = 3.5; // 缩小间距
+            
+            bagua.forEach(gua => {
+                const angleRad = (gua.angle - 90) * Math.PI / 180;
+                const x = Math.cos(angleRad) * signDistance;
+                const z = Math.sin(angleRad) * signDistance;
+                
+                // 计算朝向圆心的角度
+                const faceAngle = Math.atan2(-x, -z);
+                
+                // 六边形底座
+                const baseGeo = new THREE.CylinderGeometry(2.5, 3, 1, 6);
+                const baseMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x2a2a2a, metalness: 0.8, roughness: 0.3 
+                });
+                const base = new THREE.Mesh(baseGeo, baseMat);
+                base.position.set(x, 0.5, z);
+                base.rotation.y = faceAngle;
+                base.castShadow = true;
+                base.receiveShadow = true;
+                scene.add(base);
+                
+                // 单支撑杆
+                const poleMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x8b4513, metalness: 0.4, roughness: 0.6 
+                });
+                const poleGeo = new THREE.CylinderGeometry(0.3, 0.4, poleHeight, 8);
+                const pole = new THREE.Mesh(poleGeo, poleMat);
+                pole.position.set(x, poleHeight/2 + 1, z);
+                pole.castShadow = true;
+                scene.add(pole);
+                
+                
+                // 创建LCD面板纹理
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                
+                // LCD背景（深色渐变）
+                const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+                gradient.addColorStop(0, '#0a0a15');
+                gradient.addColorStop(0.5, '#151525');
+                gradient.addColorStop(1, '#0a0a15');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, 512, 256);
+                
+                // 金色边框
+                ctx.strokeStyle = '#c9a227';
+                ctx.lineWidth = 6;
+                ctx.strokeRect(8, 8, 496, 240);
+                ctx.strokeStyle = '#8b6914';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(14, 14, 484, 228);
+                
+                // 左侧：卦象符号（三爻）
+                const yaoY = [180, 128, 76];
+                gua.symbol.forEach((yang, i) => {
+                    ctx.fillStyle = '#e8d5a3';
+                    if (yang === 1) {
+                        // 阳爻（实线）
+                        ctx.fillRect(50, yaoY[i] - 8, 100, 16);
+                    } else {
+                        // 阴爻（断线）
+                        ctx.fillRect(50, yaoY[i] - 8, 40, 16);
+                        ctx.fillRect(110, yaoY[i] - 8, 40, 16);
+                    }
+                });
+                
+                // 中间：卦名（大字）
+                ctx.fillStyle = '#f5e6c8';
+                ctx.font = 'bold 140px "SimSun", "宋体", serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowColor = '#c9a227';
+                ctx.shadowBlur = 15;
+                ctx.fillText(gua.name, 280, 128);
+                ctx.shadowBlur = 0;
+                
+                // 右侧：方位
+                ctx.fillStyle = '#a0a0a0';
+                ctx.font = '36px "SimSun", serif';
+                ctx.fillText(gua.dir, 440, 128);
+                
+                // 顶部装饰线
+                ctx.strokeStyle = '#c9a227';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(180, 40);
+                ctx.lineTo(380, 40);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(180, 216);
+                ctx.lineTo(380, 216);
+                ctx.stroke();
+                
+                // 创建双面LCD面板
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.anisotropy = 16;
+                
+                // 面板外框（金属质感）
+                const frameGeo = new THREE.BoxGeometry(panelWidth + 0.8, panelHeight + 0.8, 0.6);
+                const frameMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x1a1a1a, metalness: 0.9, roughness: 0.2
+                });
+                const frame = new THREE.Mesh(frameGeo, frameMat);
+                frame.position.set(x, poleHeight + panelHeight/2 + 1.5, z);
+                frame.rotation.y = faceAngle;
+                frame.castShadow = true;
+                scene.add(frame);
+                
+                // 正面LCD屏幕
+                const screenMat = new THREE.MeshStandardMaterial({ 
+                    map: texture, 
+                    emissive: 0xffffff,
+                    emissiveMap: texture,
+                    emissiveIntensity: 0.15
+                });
+                const screenGeo = new THREE.PlaneGeometry(panelWidth, panelHeight);
+                
+                const screenFront = new THREE.Mesh(screenGeo, screenMat);
+                screenFront.position.set(x, poleHeight + panelHeight/2 + 1.5, z);
+                screenFront.rotation.y = faceAngle;
+                screenFront.translateZ(0.35);
+                scene.add(screenFront);
+                
+                // 背面LCD屏幕
+                const screenBack = new THREE.Mesh(screenGeo, screenMat);
+                screenBack.position.set(x, poleHeight + panelHeight/2 + 1.5, z);
+                screenBack.rotation.y = faceAngle + Math.PI;
+                screenBack.translateZ(0.35);
+                scene.add(screenBack);
+                
+                // 添加物理碰撞体（让汽车不能穿过）
+                const signBody = new CANNON.Body({
+                    mass: 0,
+                    position: new CANNON.Vec3(x, poleHeight/2 + 5, z)
+                });
+                // 底座碰撞
+                signBody.addShape(new CANNON.Cylinder(2.5, 3, 1, 6), new CANNON.Vec3(0, -poleHeight/2 - 4.5, 0));
+                // 支撑杆碰撞
+                signBody.addShape(new CANNON.Cylinder(0.4, 0.4, poleHeight, 8), new CANNON.Vec3(0, -4, 0));
+                // 面板碰撞
+                signBody.addShape(new CANNON.Box(new CANNON.Vec3(panelWidth/2 + 0.5, panelHeight/2 + 0.5, 1)), new CANNON.Vec3(0, panelHeight/2 + 1.5, 0));
+                world.addBody(signBody);
+            });
+        }
+
+        // ============================================
+        // 创建车辆（加载外部3D模型）
+        // ============================================
+        function createVehicle() {
+            // 车身物理尺寸
+            const chassisWidth = 1.8;
+            const chassisHeight = 0.5;
+            const chassisLength = 4.5;
+
+            // 创建车身容器
+            const chassisGroup = new THREE.Group();
+
+            // === 初始化GLTF加载器 ===
+            gltfLoader = new GLTFLoader();
+            
+            // 设置Draco解码器（用于压缩模型）
+            const dracoLoader = new DRACOLoader();
+            dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+            gltfLoader.setDRACOLoader(dracoLoader);
+
+            // Three.js 官方 Ferrari 跑车模型
+            const ferrariUrl = 'https://threejs.org/examples/models/gltf/ferrari.glb';
+
+            // 加载 Ferrari 模型
+            console.log('🔄 正在加载 Ferrari 跑车模型...');
+            
+            gltfLoader.load(
+                ferrariUrl,
+                (gltf) => {
+                    carModel = gltf.scene;
+                    
+                    // Ferrari 模型参数调整
+                    carModel.scale.set(0.5, 0.5, 0.5);
+                    carModel.position.set(0, -0.45, 0); // 下移让车贴地
+                    carModel.rotation.y = Math.PI; // 车头朝前
+                    
+                    // 为模型添加阴影和增强材质
+                    carModel.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                            
+                            if (child.material) {
+                                child.material.envMap = envMap;
+                                child.material.envMapIntensity = 2.0;
+                                child.material.needsUpdate = true;
+                            }
+                        }
+                    });
+                    
+                    chassisGroup.add(carModel);
+                    
+                    // 隐藏备用轮子（Ferrari模型自带轮子）
+                    wheelMeshes.forEach(wheel => {
+                        wheel.visible = false;
+                    });
+                    
+                    // 查找Ferrari模型中的轮子
+                    ferrariWheels = [];
+                    carModel.traverse((child) => {
+                        // Ferrari模型轮子名称通常包含 'wheel'
+                        if (child.name && child.name.toLowerCase().includes('wheel')) {
+                            ferrariWheels.push(child);
+                            console.log('找到轮子:', child.name);
+                        }
+                    });
+                    
+                    console.log('🚗 Ferrari 跑车模型加载成功！找到', ferrariWheels.length, '个轮子');
+                },
+                (progress) => {
+                    if (progress.total > 0) {
+                        const percent = Math.round((progress.loaded / progress.total) * 100);
+                        console.log(`加载进度: ${percent}%`);
+                    }
+                },
+                (error) => {
+                    console.warn('Ferrari 模型加载失败，使用备用模型:', error.message);
+                }
+            );
+
+            scene.add(chassisGroup);
+
+            // ---- Cannon.js 车身物理体 ----
+            const chassisShape = new CANNON.Box(new CANNON.Vec3(
+                chassisWidth / 2,
+                chassisHeight / 2,
+                chassisLength / 2
+            ));
+            chassisBody = new CANNON.Body({
+                mass: vehicleConfig.chassisMass,
+                material: new CANNON.Material('chassis')
+            });
+            chassisBody.addShape(chassisShape);
+            chassisBody.position.set(0, 4, 0);
+
+            // ---- 创建RaycastVehicle ----
+            vehicle = new CANNON.RaycastVehicle({
+                chassisBody: chassisBody,
+                indexRightAxis: 0,
+                indexUpAxis: 1,
+                indexForwardAxis: 2
+            });
+
+            // 轮子配置
+            const wheelOptions = {
+                radius: vehicleConfig.wheelRadius,
+                directionLocal: new CANNON.Vec3(0, -1, 0),
+                suspensionStiffness: vehicleConfig.suspensionStiffness,
+                suspensionRestLength: vehicleConfig.suspensionRestLength,
+                frictionSlip: vehicleConfig.frictionSlip,
+                dampingRelaxation: vehicleConfig.dampingRelaxation,
+                dampingCompression: vehicleConfig.dampingCompression,
+                maxSuspensionForce: 100000,
+                rollInfluence: vehicleConfig.rollInfluence,
+                axleLocal: new CANNON.Vec3(-1, 0, 0),
+                chassisConnectionPointLocal: new CANNON.Vec3(),
+                maxSuspensionTravel: 0.5,
+                customSlidingRotationalSpeed: -30,
+                useCustomSlidingRotationalSpeed: true
+            };
+
+            // 轮子位置（连接点在车身底部）
+            const wheelPositions = [
+                new CANNON.Vec3(-chassisWidth / 2 + 0.15, -0.2, chassisLength * 0.32),   // 前左
+                new CANNON.Vec3(chassisWidth / 2 - 0.15, -0.2, chassisLength * 0.32),    // 前右
+                new CANNON.Vec3(-chassisWidth / 2 + 0.15, -0.2, -chassisLength * 0.32),  // 后左
+                new CANNON.Vec3(chassisWidth / 2 - 0.15, -0.2, -chassisLength * 0.32)    // 后右
+            ];
+
+            // 添加轮子（跑车风格轮毂）
+            wheelPositions.forEach((pos, index) => {
+                wheelOptions.chassisConnectionPointLocal.copy(pos);
+                vehicle.addWheel(wheelOptions);
+
+                // 创建跑车风格轮子（模型加载后会隐藏）
+                const wheelGroup = new THREE.Group();
+                const isLeftWheel = index % 2 === 0;
+                const wheelR = vehicleConfig.wheelRadius;
+
+                // 轮胎材质
+                const tireMaterial = new THREE.MeshPhysicalMaterial({
+                    color: 0x1a1a1a,
+                    metalness: 0,
+                    roughness: 0.85
+                });
+
+                // === 轮胎 ===
+                const tireGeometry = new THREE.TorusGeometry(wheelR * 0.8, wheelR * 0.2, 24, 48);
+                const tire = new THREE.Mesh(tireGeometry, tireMaterial);
+                tire.rotation.y = Math.PI / 2;
+                tire.castShadow = true;
+                wheelGroup.add(tire);
+
+                // 轮胎侧壁
+                const tireSideGeometry = new THREE.RingGeometry(wheelR * 0.58, wheelR * 1.0, 48);
+                const tireSideMaterial = new THREE.MeshPhysicalMaterial({
+                    color: 0x111111,
+                    metalness: 0,
+                    roughness: 0.9,
+                    side: THREE.DoubleSide
+                });
+                [-1, 1].forEach(side => {
+                    const tireSide = new THREE.Mesh(tireSideGeometry, tireSideMaterial);
+                    tireSide.rotation.y = Math.PI / 2;
+                    tireSide.position.x = side * vehicleConfig.wheelWidth * 0.35;
+                    wheelGroup.add(tireSide);
+                });
+
+                // === 跑车轮毂（5辐Y型） ===
+                const hubMaterial = new THREE.MeshPhysicalMaterial({
+                    color: 0x222222,
+                    metalness: 0.95,
+                    roughness: 0.1,
+                    envMapIntensity: 2.0
+                });
+                const hubGeometry = new THREE.CylinderGeometry(wheelR * 0.58, wheelR * 0.58, vehicleConfig.wheelWidth * 0.6, 32);
+                hubGeometry.rotateZ(Math.PI / 2);
+                const hub = new THREE.Mesh(hubGeometry, hubMaterial);
+                wheelGroup.add(hub);
+
+                // Y型辐条（5个）
+                const spokeMaterial = new THREE.MeshPhysicalMaterial({
+                    color: 0x333333,
+                    metalness: 0.9,
+                    roughness: 0.15,
+                    envMapIntensity: 1.5
+                });
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i / 5) * Math.PI * 2;
+                    const spokeGeometry = new THREE.BoxGeometry(0.08, wheelR * 0.5, 0.15);
+                    const spoke = new THREE.Mesh(spokeGeometry, spokeMaterial);
+                    spoke.position.set(
+                        0,
+                        Math.cos(angle) * wheelR * 0.28,
+                        Math.sin(angle) * wheelR * 0.28
+                    );
+                    spoke.rotation.x = angle;
+                    wheelGroup.add(spoke);
+                }
+
+                // 中心盖（红色）
+                const capGeometry = new THREE.CylinderGeometry(wheelR * 0.15, wheelR * 0.15, 0.1, 20);
+                capGeometry.rotateZ(Math.PI / 2);
+                const capMaterial = new THREE.MeshPhysicalMaterial({
+                    color: 0xff0000,
+                    metalness: 0.8,
+                    roughness: 0.2,
+                    clearcoat: 1.0
+                });
+                const cap = new THREE.Mesh(capGeometry, capMaterial);
+                cap.position.x = isLeftWheel ? -0.08 : 0.08;
+                wheelGroup.add(cap);
+
+                wheelGroup.visible = false; // 默认隐藏，等Ferrari模型加载后用它的轮子
+                scene.add(wheelGroup);
+                wheelMeshes.push(wheelGroup);
+            });
+
+            vehicle.addToWorld(world);
+
+            // 存储车身映射
+            objectsToUpdate.push({
+                mesh: chassisGroup,
+                body: chassisBody
+            });
+        }
+
+        // ============================================
+        // 程序化地图生成
+        // ============================================
+        
+        // 检查点是否在道路上
+        function isOnRoad(x, z, margin = 8) {
+            for (const p of roadPathPoints) {
+                const dist = Math.sqrt((x - p.x) ** 2 + (z - p.z) ** 2);
+                if (dist < margin) return true;
+            }
+            return false;
+        }
+        
+        // 检查点是否在湖泊中
+        function isInLake(x, z, margin = 5) {
+            for (const lake of lakePositions) {
+                const dist = Math.sqrt((x - lake.x) ** 2 + (z - lake.z) ** 2);
+                if (dist < lake.r + margin) return true;
+            }
+            return false;
+        }
+        
+        function generateMap() {
+            const mapRadius = 230; // 圆形地图半径
+            const safeZone = 15;
+
+            console.log('🏙️ 开始生成地图...');
+
+            // 生成树木（避开道路和湖泊，只在圆形范围内）
+            let treeCount = 0;
+            let attempts = 0;
+            while (treeCount < 80 && attempts < 400) {
+                // 在圆形范围内随机生成
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * mapRadius;
+                const x = Math.cos(angle) * dist;
+                const z = Math.sin(angle) * dist;
+                attempts++;
+                
+                // 避开出生点、道路和湖泊
+                if (Math.abs(x) < safeZone && Math.abs(z) < safeZone) continue;
+                if (isOnRoad(x, z)) continue;
+                if (isInLake(x, z)) continue;
+                
+                createTree(x, z);
+                treeCount++;
+            }
+
+            // 在固定位置生成湖泊
+            for (const lake of lakePositions) {
+                createLake(lake.x, lake.z);
+            }
+
+            console.log('🏙️ 地图生成完成！');
+        }
+
+        // 加载外部环境模型
+        async function loadEnvironmentModels() {
+            const loader = new GLTFLoader();
+            const dracoLoader = new DRACOLoader();
+            dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+            loader.setDRACOLoader(dracoLoader);
+
+            // 模型URL列表（使用更精细的免费模型）
+            const modelUrls = {
+                tree: 'https://vazxmixjsiawhamofees.supabase.co/storage/v1/object/public/models/tree-lime/model.gltf',
+                house: 'https://vazxmixjsiawhamofees.supabase.co/storage/v1/object/public/models/building-korean-house/model.gltf',
+                bench: 'https://vazxmixjsiawhamofees.supabase.co/storage/v1/object/public/models/bench-2/model.gltf',
+                streetlamp: 'https://vazxmixjsiawhamofees.supabase.co/storage/v1/object/public/models/street-lamp/model.gltf'
+            };
+
+            const loadModel = (name, url) => {
+                return new Promise((resolve) => {
+                    loader.load(
+                        url,
+                        (gltf) => {
+                            envModels[name] = gltf.scene;
+                            // 为模型添加阴影
+                            gltf.scene.traverse((child) => {
+                                if (child.isMesh) {
+                                    child.castShadow = true;
+                                    child.receiveShadow = true;
+                                }
+                            });
+                            console.log(`✅ ${name} 模型加载成功`);
+                            resolve();
+                        },
+                        undefined,
+                        (error) => {
+                            console.warn(`⚠️ ${name} 模型加载失败:`, error.message);
+                            resolve(); // 失败也继续
+                        }
+                    );
+                });
+            };
+
+            // 并行加载所有模型
+            await Promise.all([
+                loadModel('tree', modelUrls.tree),
+                loadModel('house', modelUrls.house),
+                loadModel('cactus', modelUrls.cactus)
+            ]);
+
+            modelsLoaded = true;
+        }
+
+        // 创建小房子
+        function createHouse(x, z) {
+            createSimpleHouse(x, z);
+        }
+
+        // 备用简单房子
+        function createSimpleHouse(x, z) {
+            const houseGroup = new THREE.Group();
+            houseGroup.position.set(x, 0, z);
+
+            // 房身
+            const bodyGeo = new THREE.BoxGeometry(6, 4, 5);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.8 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 2;
+            body.castShadow = true;
+            houseGroup.add(body);
+
+            // 屋顶
+            const roofGeo = new THREE.ConeGeometry(5, 3, 4);
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.9 });
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = 5.5;
+            roof.rotation.y = Math.PI / 4;
+            roof.castShadow = true;
+            houseGroup.add(roof);
+
+            // 门
+            const doorGeo = new THREE.BoxGeometry(1.2, 2, 0.1);
+            const doorMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
+            const door = new THREE.Mesh(doorGeo, doorMat);
+            door.position.set(0, 1, 2.55);
+            houseGroup.add(door);
+
+            scene.add(houseGroup);
+
+            // 物理体
+            const houseShape = new CANNON.Box(new CANNON.Vec3(3, 3.5, 2.5));
+            const houseBody = new CANNON.Body({
+                mass: 0,
+                position: new CANNON.Vec3(x, 3.5, z)
+            });
+            houseBody.addShape(houseShape);
+            world.addBody(houseBody);
+        }
+
+        // 创建精细建筑物
+        function createBuilding(x, z, width, height, depth) {
+            const buildingGroup = new THREE.Group();
+            buildingGroup.position.set(x, 0, z);
+
+            // 建筑类型随机
+            const buildingType = Math.random();
+            
+            // 现代玻璃幕墙大楼
+            if (buildingType > 0.5) {
+                createModernBuilding(buildingGroup, width, height, depth);
+            } else {
+                createClassicBuilding(buildingGroup, width, height, depth);
+            }
+
+            scene.add(buildingGroup);
+
+            // 物理体
+            const shape = new CANNON.Box(new CANNON.Vec3(width / 2, height / 2, depth / 2));
+            const body = new CANNON.Body({
+                mass: 0,
+                position: new CANNON.Vec3(x, height / 2, z)
+            });
+            body.addShape(shape);
+            world.addBody(body);
+        }
+
+        // 现代玻璃幕墙建筑
+        function createModernBuilding(group, width, height, depth) {
+            // 主体 - 玻璃幕墙
+            const glassMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x88ccff,
+                metalness: 0.9,
+                roughness: 0.1,
+                transmission: 0.3,
+                thickness: 0.5,
+                envMapIntensity: 2.0
+            });
+            
+            const frameMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+
+            // 主体
+            const mainGeo = new THREE.BoxGeometry(width - 0.2, height, depth - 0.2);
+            const main = new THREE.Mesh(mainGeo, glassMaterial);
+            main.position.y = height / 2;
+            main.castShadow = true;
+            main.receiveShadow = true;
+            group.add(main);
+
+            // 楼层分隔线
+            const floorHeight = 3.5;
+            for (let y = floorHeight; y < height; y += floorHeight) {
+                const lineGeo = new THREE.BoxGeometry(width + 0.1, 0.15, depth + 0.1);
+                const line = new THREE.Mesh(lineGeo, frameMaterial);
+                line.position.y = y;
+                group.add(line);
+            }
+
+            // 垂直框架
+            const framePositions = [
+                [-width/2, depth/2], [width/2, depth/2],
+                [-width/2, -depth/2], [width/2, -depth/2]
+            ];
+            framePositions.forEach(([fx, fz]) => {
+                const frameGeo = new THREE.BoxGeometry(0.3, height, 0.3);
+                const frame = new THREE.Mesh(frameGeo, frameMaterial);
+                frame.position.set(fx, height/2, fz);
+                group.add(frame);
+            });
+
+            // 屋顶设备
+            const roofEquipGeo = new THREE.BoxGeometry(width * 0.3, 2, depth * 0.3);
+            const roofEquip = new THREE.Mesh(roofEquipGeo, frameMaterial);
+            roofEquip.position.y = height + 1;
+            group.add(roofEquip);
+
+            // 天线
+            const antennaGeo = new THREE.CylinderGeometry(0.1, 0.1, 5, 8);
+            const antenna = new THREE.Mesh(antennaGeo, frameMaterial);
+            antenna.position.y = height + 4.5;
+            group.add(antenna);
+
+            // 发光窗户
+            addGlowingWindows(group, width, height, depth, floorHeight);
+        }
+
+        // 经典砖墙建筑
+        function createClassicBuilding(group, width, height, depth) {
+            const colors = [0xb85c38, 0x8b4513, 0xa0522d, 0xcd853f];
+            const brickColor = colors[Math.floor(Math.random() * colors.length)];
+
+            const brickMaterial = new THREE.MeshStandardMaterial({
+                color: brickColor,
+                roughness: 0.9,
+                metalness: 0.1
+            });
+
+            const concreteMaterial = new THREE.MeshStandardMaterial({
+                color: 0xcccccc,
+                roughness: 0.8
+            });
+
+            // 主体
+            const mainGeo = new THREE.BoxGeometry(width, height, depth);
+            const main = new THREE.Mesh(mainGeo, brickMaterial);
+            main.position.y = height / 2;
+            main.castShadow = true;
+            main.receiveShadow = true;
+            group.add(main);
+
+            // 底座
+            const baseGeo = new THREE.BoxGeometry(width + 0.5, 1.5, depth + 0.5);
+            const base = new THREE.Mesh(baseGeo, concreteMaterial);
+            base.position.y = 0.75;
+            group.add(base);
+
+            // 顶部装饰
+            const topGeo = new THREE.BoxGeometry(width + 0.3, 0.8, depth + 0.3);
+            const top = new THREE.Mesh(topGeo, concreteMaterial);
+            top.position.y = height + 0.4;
+            group.add(top);
+
+            // 窗户
+            addDetailedWindows(group, width, height, depth);
+
+            // 阳台（随机添加）
+            if (Math.random() > 0.5) {
+                addBalconies(group, width, height, depth);
+            }
+
+            // 空调外机
+            addACUnits(group, width, height, depth);
+        }
+
+        // 发光窗户（现代建筑）
+        function addGlowingWindows(group, width, height, depth, floorHeight) {
+            const windowMat = new THREE.MeshStandardMaterial({
+                color: 0xffffee,
+                emissive: 0xffffaa,
+                emissiveIntensity: Math.random() * 0.5 + 0.2
+            });
+
+            for (let y = floorHeight/2; y < height - 1; y += floorHeight) {
+                for (let wx = -width/2 + 1.5; wx < width/2 - 1; wx += 2.5) {
+                    if (Math.random() > 0.3) {
+                        const winGeo = new THREE.PlaneGeometry(1.5, 2);
+                        const win = new THREE.Mesh(winGeo, windowMat.clone());
+                        win.position.set(wx, y, depth/2 + 0.02);
+                        group.add(win);
+                    }
+                }
+            }
+        }
+
+        // 详细窗户（经典建筑）
+        function addDetailedWindows(group, width, height, depth) {
+            const windowFrameMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+            const glassMat = new THREE.MeshStandardMaterial({
+                color: 0x88aacc,
+                emissive: 0xffffcc,
+                emissiveIntensity: Math.random() * 0.3,
+                metalness: 0.5,
+                roughness: 0.2
+            });
+
+            const floorHeight = 3.5;
+            for (let y = 2.5; y < height - 1; y += floorHeight) {
+                for (let wx = -width/2 + 2; wx < width/2 - 1; wx += 3) {
+                    // 窗框
+                    const frameGeo = new THREE.BoxGeometry(1.4, 2.2, 0.15);
+                    const frame = new THREE.Mesh(frameGeo, windowFrameMat);
+                    frame.position.set(wx, y, depth/2 + 0.08);
+                    group.add(frame);
+
+                    // 玻璃
+                    const glassGeo = new THREE.PlaneGeometry(1.2, 2);
+                    const glass = new THREE.Mesh(glassGeo, glassMat.clone());
+                    glass.position.set(wx, y, depth/2 + 0.16);
+                    group.add(glass);
+                }
+            }
+        }
+
+        // 阳台
+        function addBalconies(group, width, height, depth) {
+            const balconyMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
+            const railMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
+
+            const floorHeight = 3.5;
+            for (let y = floorHeight; y < height - 2; y += floorHeight * 2) {
+                // 阳台地板
+                const floorGeo = new THREE.BoxGeometry(2.5, 0.15, 1.2);
+                const floor = new THREE.Mesh(floorGeo, balconyMat);
+                floor.position.set(0, y, depth/2 + 0.6);
+                group.add(floor);
+
+                // 栏杆
+                const railGeo = new THREE.BoxGeometry(2.5, 1, 0.05);
+                const rail = new THREE.Mesh(railGeo, railMat);
+                rail.position.set(0, y + 0.5, depth/2 + 1.15);
+                group.add(rail);
+            }
+        }
+
+        // 空调外机
+        function addACUnits(group, width, height, depth) {
+            const acMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.6 });
+
+            for (let i = 0; i < 3; i++) {
+                if (Math.random() > 0.5) {
+                    const acGeo = new THREE.BoxGeometry(0.8, 0.6, 0.4);
+                    const ac = new THREE.Mesh(acGeo, acMat);
+                    const yPos = 5 + i * 7 + Math.random() * 3;
+                    if (yPos < height - 2) {
+                        ac.position.set(-width/2 - 0.2, yPos, (Math.random() - 0.5) * depth * 0.6);
+                        group.add(ac);
+                    }
+                }
+            }
+        }
+
+        // 给建筑添加窗户（保留兼容性）
+        function addWindowsToBuilding(building, width, height, depth) {
+            const windowGeometry = new THREE.PlaneGeometry(1, 1.5);
+            const windowMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffcc,
+                emissive: 0xffffcc,
+                emissiveIntensity: Math.random() * 0.3,
+                side: THREE.DoubleSide
+            });
+
+            const windowSpacingH = 3;
+            const windowSpacingV = 4;
+
+            // 前后面窗户
+            for (let y = 2; y < height - 2; y += windowSpacingV) {
+                for (let wx = -width / 2 + 2; wx < width / 2 - 1; wx += windowSpacingH) {
+                    // 前面
+                    const frontWindow = new THREE.Mesh(windowGeometry, windowMaterial.clone());
+                    frontWindow.position.set(wx, y - height / 2, depth / 2 + 0.01);
+                    building.add(frontWindow);
+
+                    // 后面
+                    const backWindow = new THREE.Mesh(windowGeometry, windowMaterial.clone());
+                    backWindow.position.set(wx, y - height / 2, -depth / 2 - 0.01);
+                    backWindow.rotation.y = Math.PI;
+                    building.add(backWindow);
+                }
+            }
+
+            // 左右面窗户
+            for (let y = 2; y < height - 2; y += windowSpacingV) {
+                for (let wz = -depth / 2 + 2; wz < depth / 2 - 1; wz += windowSpacingH) {
+                    // 左面
+                    const leftWindow = new THREE.Mesh(windowGeometry, windowMaterial.clone());
+                    leftWindow.position.set(-width / 2 - 0.01, y - height / 2, wz);
+                    leftWindow.rotation.y = -Math.PI / 2;
+                    building.add(leftWindow);
+
+                    // 右面
+                    const rightWindow = new THREE.Mesh(windowGeometry, windowMaterial.clone());
+                    rightWindow.position.set(width / 2 + 0.01, y - height / 2, wz);
+                    rightWindow.rotation.y = Math.PI / 2;
+                    building.add(rightWindow);
+                }
+            }
+        }
+
+        // 创建广告牌
+        function createBillboard(x, z) {
+            const poleHeight = 8;
+            const poleRadius = 0.2;
+            const boardWidth = 6;
+            const boardHeight = 3;
+
+            // 广告牌组
+            const billboardGroup = new THREE.Group();
+            billboardGroup.position.set(x, 0, z);
+
+            // 杆子
+            const poleGeometry = new THREE.CylinderGeometry(poleRadius, poleRadius, poleHeight, 8);
+            const poleMaterial = new THREE.MeshStandardMaterial({
+                color: 0x666666,
+                metalness: 0.8,
+                roughness: 0.3
+            });
+            const poleMesh = new THREE.Mesh(poleGeometry, poleMaterial);
+            poleMesh.position.y = poleHeight / 2;
+            poleMesh.castShadow = true;
+            billboardGroup.add(poleMesh);
+
+            // 广告板
+            const boardGeometry = new THREE.BoxGeometry(boardWidth, boardHeight, 0.3);
+            const boardColors = [0xe91e63, 0x2196f3, 0xff9800, 0x4caf50, 0x9c27b0];
+            const boardMaterial = new THREE.MeshStandardMaterial({
+                color: boardColors[Math.floor(Math.random() * boardColors.length)],
+                roughness: 0.5,
+                metalness: 0.2
+            });
+            const boardMesh = new THREE.Mesh(boardGeometry, boardMaterial);
+            boardMesh.position.y = poleHeight + boardHeight / 2;
+            boardMesh.castShadow = true;
+            billboardGroup.add(boardMesh);
+
+            scene.add(billboardGroup);
+
+            // 杆子物理体
+            const poleShape = new CANNON.Cylinder(poleRadius, poleRadius, poleHeight, 8);
+            const poleBody = new CANNON.Body({
+                mass: 0,
+                position: new CANNON.Vec3(x, poleHeight / 2, z)
+            });
+            poleBody.addShape(poleShape);
+            world.addBody(poleBody);
+        }
+
+        // 创建精细树木
+        function createTree(x, z) {
+            const treeType = Math.random();
+            const treeGroup = new THREE.Group();
+            treeGroup.position.set(x, 0, z);
+
+            const trunkMat = new THREE.MeshStandardMaterial({
+                color: 0x5d4037,
+                roughness: 0.9
+            });
+
+            if (treeType > 0.5) {
+                // 圆形阔叶树
+                const trunkHeight = 4 + Math.random() * 3;
+                const trunkRadius = 0.25 + Math.random() * 0.15;
+
+                // 树干
+                const trunkGeo = new THREE.CylinderGeometry(trunkRadius * 0.6, trunkRadius, trunkHeight, 8);
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = trunkHeight / 2;
+                trunk.castShadow = true;
+                treeGroup.add(trunk);
+
+                // 多层球形树冠
+                const leafColors = [0x228b22, 0x2e8b57, 0x32cd32, 0x3cb371];
+                const leafMat = new THREE.MeshStandardMaterial({
+                    color: leafColors[Math.floor(Math.random() * leafColors.length)],
+                    roughness: 0.8
+                });
+
+                const crownRadius = 2 + Math.random() * 1.5;
+                // 主树冠
+                const mainCrownGeo = new THREE.SphereGeometry(crownRadius, 12, 12);
+                const mainCrown = new THREE.Mesh(mainCrownGeo, leafMat);
+                mainCrown.position.y = trunkHeight + crownRadius * 0.6;
+                mainCrown.castShadow = true;
+                treeGroup.add(mainCrown);
+
+                // 副树冠
+                for (let i = 0; i < 3; i++) {
+                    const subRadius = crownRadius * (0.5 + Math.random() * 0.3);
+                    const subGeo = new THREE.SphereGeometry(subRadius, 8, 8);
+                    const sub = new THREE.Mesh(subGeo, leafMat);
+                    const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.5;
+                    sub.position.set(
+                        Math.cos(angle) * crownRadius * 0.5,
+                        trunkHeight + crownRadius * 0.3 + Math.random(),
+                        Math.sin(angle) * crownRadius * 0.5
+                    );
+                    sub.castShadow = true;
+                    treeGroup.add(sub);
+                }
+
+                // 物理体
+                const shape = new CANNON.Cylinder(trunkRadius * 0.6, trunkRadius, trunkHeight, 8);
+                const body = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(x, trunkHeight / 2, z) });
+                body.addShape(shape);
+                world.addBody(body);
+
+            } else {
+                // 松树/针叶树
+                const trunkHeight = 5 + Math.random() * 4;
+                const trunkRadius = 0.2 + Math.random() * 0.1;
+
+                // 树干
+                const trunkGeo = new THREE.CylinderGeometry(trunkRadius * 0.5, trunkRadius, trunkHeight, 8);
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = trunkHeight / 2;
+                trunk.castShadow = true;
+                treeGroup.add(trunk);
+
+                // 多层锥形树冠
+                const leafMat = new THREE.MeshStandardMaterial({
+                    color: 0x1b5e20,
+                    roughness: 0.85
+                });
+
+                const layers = 3 + Math.floor(Math.random() * 2);
+                for (let i = 0; i < layers; i++) {
+                    const layerY = trunkHeight * 0.4 + i * 1.8;
+                    const layerRadius = 2 - i * 0.4 + Math.random() * 0.3;
+                    const layerHeight = 2.5 - i * 0.3;
+
+                    const coneGeo = new THREE.ConeGeometry(layerRadius, layerHeight, 8);
+                    const cone = new THREE.Mesh(coneGeo, leafMat);
+                    cone.position.y = layerY;
+                    cone.castShadow = true;
+                    treeGroup.add(cone);
+                }
+
+                // 物理体
+                const shape = new CANNON.Cylinder(trunkRadius * 0.5, trunkRadius, trunkHeight, 8);
+                const body = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(x, trunkHeight / 2, z) });
+                body.addShape(shape);
+                world.addBody(body);
+            }
+
+            scene.add(treeGroup);
+            
+            // 存储树木信息用于碰撞检测
+            trees.push({
+                group: treeGroup,
+                x: x,
+                z: z,
+                radius: 1.5, // 碰撞半径
+                shakeTime: 0,
+                originalRotation: { x: 0, z: 0 }
+            });
+        }
+
+        // 创建精细湖泊
+        function createLake(x, z) {
+            const lakeRadius = 12 + Math.random() * 12;
+            const segments = 64;
+            const lakeGroup = new THREE.Group();
+            lakeGroup.position.set(x, 0, z);
+
+            // 湖底（深色）
+            const bottomGeo = new THREE.CircleGeometry(lakeRadius - 0.5, segments);
+            const bottomMat = new THREE.MeshStandardMaterial({
+                color: 0x0d3b66,
+                roughness: 0.9
+            });
+            const bottom = new THREE.Mesh(bottomGeo, bottomMat);
+            bottom.rotation.x = -Math.PI / 2;
+            bottom.position.y = -0.3;
+            lakeGroup.add(bottom);
+
+            // 湖面（带反射的水）
+            const waterMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x0077be,
+                metalness: 0.1,
+                roughness: 0.05,
+                transmission: 0.6,
+                thickness: 1.5,
+                ior: 1.33,
+                transparent: true,
+                opacity: 0.85,
+                envMapIntensity: 1.5
+            });
+            const waterGeo = new THREE.CircleGeometry(lakeRadius, segments);
+            const water = new THREE.Mesh(waterGeo, waterMaterial);
+            water.rotation.x = -Math.PI / 2;
+            water.position.y = 0.05;
+            water.receiveShadow = true;
+            lakeGroup.add(water);
+
+            // 沙滩环
+            const sandGeo = new THREE.RingGeometry(lakeRadius, lakeRadius + 2, segments);
+            const sandMat = new THREE.MeshStandardMaterial({
+                color: 0xf4d03f,
+                roughness: 0.95
+            });
+            const sand = new THREE.Mesh(sandGeo, sandMat);
+            sand.rotation.x = -Math.PI / 2;
+            sand.position.y = 0.02;
+            lakeGroup.add(sand);
+
+            // 草地边缘
+            const grassGeo = new THREE.RingGeometry(lakeRadius + 2, lakeRadius + 4, segments);
+            const grassMat = new THREE.MeshStandardMaterial({
+                color: 0x228b22,
+                roughness: 0.9
+            });
+            const grass = new THREE.Mesh(grassGeo, grassMat);
+            grass.rotation.x = -Math.PI / 2;
+            grass.position.y = 0.03;
+            lakeGroup.add(grass);
+
+            // 添加岸边石头
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2 + Math.random() * 0.3;
+                const dist = lakeRadius + 0.5 + Math.random() * 1.5;
+                const rockSize = 0.3 + Math.random() * 0.5;
+                
+                const rockGeo = new THREE.DodecahedronGeometry(rockSize, 0);
+                const rockMat = new THREE.MeshStandardMaterial({
+                    color: 0x696969,
+                    roughness: 0.9,
+                    flatShading: true
+                });
+                const rock = new THREE.Mesh(rockGeo, rockMat);
+                rock.position.set(
+                    Math.cos(angle) * dist,
+                    rockSize * 0.3,
+                    Math.sin(angle) * dist
+                );
+                rock.rotation.set(Math.random(), Math.random(), Math.random());
+                rock.castShadow = true;
+                lakeGroup.add(rock);
+            }
+
+            // 添加芦苇
+            for (let i = 0; i < 20; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = lakeRadius - 1 + Math.random() * 2;
+                createReed(lakeGroup, Math.cos(angle) * dist, Math.sin(angle) * dist);
+            }
+
+            // 添加睡莲
+            for (let i = 0; i < 5; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * (lakeRadius - 3);
+                createWaterLily(lakeGroup, Math.cos(angle) * dist, Math.sin(angle) * dist);
+            }
+
+            // 添加游动的鱼
+            const fishColors = [0xff0000, 0xff4500, 0xffff00, 0x00ff00, 0x0080ff, 0xff00ff, 0xff1493, 0x00ffff];
+            const fishCount = 15 + Math.floor(Math.random() * 10);
+            
+            for (let i = 0; i < fishCount; i++) {
+                const fishGroup = new THREE.Group();
+                const color = fishColors[Math.floor(Math.random() * fishColors.length)];
+                
+                // 鱼身（椭圆形）
+                const bodyGeo = new THREE.SphereGeometry(0.15, 8, 6);
+                bodyGeo.scale(1.8, 0.8, 1);
+                const bodyMat = new THREE.MeshStandardMaterial({
+                    color: color,
+                    metalness: 0.1,
+                    roughness: 0.2,
+                    emissive: color,
+                    emissiveIntensity: 0.3
+                });
+                const body = new THREE.Mesh(bodyGeo, bodyMat);
+                fishGroup.add(body);
+                
+                // 鱼尾
+                const tailGeo = new THREE.ConeGeometry(0.1, 0.2, 4);
+                tailGeo.rotateZ(Math.PI / 2);
+                const tail = new THREE.Mesh(tailGeo, bodyMat);
+                tail.position.x = -0.25;
+                fishGroup.add(tail);
+                
+                // 鱼鳍
+                const finGeo = new THREE.ConeGeometry(0.05, 0.12, 3);
+                finGeo.rotateX(Math.PI / 2);
+                const topFin = new THREE.Mesh(finGeo, bodyMat);
+                topFin.position.set(0, 0.1, 0);
+                fishGroup.add(topFin);
+                
+                // 随机初始位置
+                const initAngle = Math.random() * Math.PI * 2;
+                const initDist = Math.random() * (lakeRadius - 2);
+                fishGroup.position.set(
+                    Math.cos(initAngle) * initDist,
+                    -0.1,
+                    Math.sin(initAngle) * initDist
+                );
+                fishGroup.rotation.y = Math.random() * Math.PI * 2;
+                
+                lakeGroup.add(fishGroup);
+                
+                // 存储鱼的信息用于动画
+                fishes.push({
+                    mesh: fishGroup,
+                    lakeX: x,
+                    lakeZ: z,
+                    lakeRadius: lakeRadius - 2,
+                    speed: 0.3 + Math.random() * 0.4,
+                    turnSpeed: 0.5 + Math.random() * 1,
+                    angle: Math.random() * Math.PI * 2,
+                    tailWag: 0
+                });
+            }
+
+            scene.add(lakeGroup);
+
+            // 湖泊边界物理体（不可见的墙）
+            const wallHeight = 3;
+            const wallThickness = 0.5;
+            const numWalls = 16;
+
+            for (let i = 0; i < numWalls; i++) {
+                const angle = (i / numWalls) * Math.PI * 2;
+                const nextAngle = ((i + 1) / numWalls) * Math.PI * 2;
+                
+                const midAngle = (angle + nextAngle) / 2;
+                const wallLength = 2 * lakeRadius * Math.sin(Math.PI / numWalls);
+                
+                const wallX = x + Math.cos(midAngle) * lakeRadius;
+                const wallZ = z + Math.sin(midAngle) * lakeRadius;
+
+                const wallShape = new CANNON.Box(new CANNON.Vec3(
+                    wallLength / 2,
+                    wallHeight / 2,
+                    wallThickness / 2
+                ));
+                const wallBody = new CANNON.Body({
+                    mass: 0,
+                    position: new CANNON.Vec3(wallX, wallHeight / 2, wallZ)
+                });
+                wallBody.quaternion.setFromEuler(0, -midAngle + Math.PI / 2, 0);
+                wallBody.addShape(wallShape);
+                world.addBody(wallBody);
+            }
+        }
+
+        // 创建芦苇
+        function createReed(group, localX, localZ) {
+            const reedGroup = new THREE.Group();
+            reedGroup.position.set(localX, 0.1, localZ);
+
+            const reedMat = new THREE.MeshStandardMaterial({
+                color: 0x6b8e23,
+                roughness: 0.8,
+                side: THREE.DoubleSide
+            });
+
+            // 多根芦苇
+            for (let i = 0; i < 3; i++) {
+                const height = 1 + Math.random() * 1.5;
+                const reedGeo = new THREE.CylinderGeometry(0.02, 0.04, height, 6);
+                const reed = new THREE.Mesh(reedGeo, reedMat);
+                reed.position.set(
+                    (Math.random() - 0.5) * 0.3,
+                    height / 2,
+                    (Math.random() - 0.5) * 0.3
+                );
+                reed.rotation.x = (Math.random() - 0.5) * 0.2;
+                reed.rotation.z = (Math.random() - 0.5) * 0.2;
+                reedGroup.add(reed);
+
+                // 芦苇穗
+                const topGeo = new THREE.CylinderGeometry(0.03, 0.01, 0.3, 6);
+                const topMat = new THREE.MeshStandardMaterial({ color: 0xdaa520 });
+                const top = new THREE.Mesh(topGeo, topMat);
+                top.position.copy(reed.position);
+                top.position.y += height / 2 + 0.15;
+                reedGroup.add(top);
+            }
+
+            group.add(reedGroup);
+        }
+
+        // 创建睡莲
+        function createWaterLily(group, localX, localZ) {
+            const lilyGroup = new THREE.Group();
+            lilyGroup.position.set(localX, 0.08, localZ);
+
+            // 荷叶
+            const leafGeo = new THREE.CircleGeometry(0.5, 16);
+            const leafMat = new THREE.MeshStandardMaterial({
+                color: 0x228b22,
+                roughness: 0.7,
+                side: THREE.DoubleSide
+            });
+            const leaf = new THREE.Mesh(leafGeo, leafMat);
+            leaf.rotation.x = -Math.PI / 2;
+            lilyGroup.add(leaf);
+
+            // 缺口效果（通过添加一个小扇形）
+            const notchGeo = new THREE.CircleGeometry(0.5, 16, 0, Math.PI / 6);
+            const notchMat = new THREE.MeshStandardMaterial({ 
+                color: 0x0077be, 
+                transparent: true,
+                opacity: 0.7
+            });
+            const notch = new THREE.Mesh(notchGeo, notchMat);
+            notch.rotation.x = -Math.PI / 2;
+            notch.position.y = 0.01;
+            lilyGroup.add(notch);
+
+            // 花朵（随机有花或无花）
+            if (Math.random() > 0.4) {
+                const petalMat = new THREE.MeshStandardMaterial({
+                    color: Math.random() > 0.5 ? 0xffb6c1 : 0xffffff,
+                    roughness: 0.5
+                });
+
+                // 花瓣
+                for (let i = 0; i < 8; i++) {
+                    const petalGeo = new THREE.SphereGeometry(0.12, 8, 8);
+                    petalGeo.scale(1, 0.3, 2);
+                    const petal = new THREE.Mesh(petalGeo, petalMat);
+                    const angle = (i / 8) * Math.PI * 2;
+                    petal.position.set(
+                        Math.cos(angle) * 0.15,
+                        0.1,
+                        Math.sin(angle) * 0.15
+                    );
+                    petal.rotation.y = -angle;
+                    lilyGroup.add(petal);
+                }
+
+                // 花蕊
+                const centerGeo = new THREE.SphereGeometry(0.08, 8, 8);
+                const centerMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+                const center = new THREE.Mesh(centerGeo, centerMat);
+                center.position.y = 0.12;
+                lilyGroup.add(center);
+            }
+
+            group.add(lilyGroup);
+        }
+
+        // ============================================
+        // 天空穹顶
+        // ============================================
+        function addSkyDome() {
+            // 简单的渐变天空
+            const skyGeometry = new THREE.SphereGeometry(400, 32, 32);
+            const skyMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    topColor: { value: new THREE.Color(0x0077ff) },
+                    bottomColor: { value: new THREE.Color(0xffffff) },
+                    offset: { value: 33 },
+                    exponent: { value: 0.6 }
+                },
+                vertexShader: `
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                        vWorldPosition = worldPosition.xyz;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 topColor;
+                    uniform vec3 bottomColor;
+                    uniform float offset;
+                    uniform float exponent;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        float h = normalize(vWorldPosition + offset).y;
+                        gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+                    }
+                `,
+                side: THREE.BackSide
+            });
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            sky.name = 'sky';
+            scene.add(sky);
+        }
+
+        // ============================================
+        // 音效系统
+        // ============================================
+        function initAudioSystem() {
+            if (audioInitialized) return;
+            
+            // 创建音频上下文（需要用户交互）
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // 确保音频上下文已启动
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            // 引擎音效（使用振荡器模拟）
+            engineOscillator = audioContext.createOscillator();
+            engineGain = audioContext.createGain();
+            
+            // 创建更丰富的引擎声音
+            const engineOsc2 = audioContext.createOscillator();
+            const engineGain2 = audioContext.createGain();
+            
+            engineOscillator.type = 'sawtooth';
+            engineOscillator.frequency.setValueAtTime(60, audioContext.currentTime);
+            engineGain.gain.setValueAtTime(0, audioContext.currentTime);
+            
+            engineOsc2.type = 'square';
+            engineOsc2.frequency.setValueAtTime(30, audioContext.currentTime);
+            engineGain2.gain.setValueAtTime(0, audioContext.currentTime);
+            
+            // 低通滤波器使声音更像引擎
+            const filter = audioContext.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(800, audioContext.currentTime);
+            
+            engineOscillator.connect(engineGain);
+            engineOsc2.connect(engineGain2);
+            engineGain.connect(filter);
+            engineGain2.connect(filter);
+            filter.connect(audioContext.destination);
+            
+            engineOscillator.start();
+            engineOsc2.start();
+            
+            sounds.engine = { osc1: engineOscillator, osc2: engineOsc2, gain1: engineGain, gain2: engineGain2, filter };
+            
+            audioInitialized = true;
+            console.log('🔊 音效系统已初始化');
+        }
+
+        function updateEngineSound(speed, isAccelerating, isReversing, isBraking) {
+            if (!sounds.engine || !audioContext) return;
+            
+            const { osc1, osc2, gain1, gain2 } = sounds.engine;
+            const currentTime = audioContext.currentTime;
+            
+            // 基础引擎音量
+            let targetVolume = 0;
+            let baseFreq = 50;
+            
+            if (isAccelerating) {
+                // 加速时
+                targetVolume = 0.12 + speed * 0.003;
+                baseFreq = 80 + speed * 4;
+            } else if (isReversing && speed > 0.3) {
+                // 倒车
+                targetVolume = 0.1;
+                baseFreq = 60 + speed * 3;
+            } else if (isBraking && speed > 2) {
+                // 刹车
+                targetVolume = 0.08;
+                baseFreq = 50;
+            } else if (speed > 1) {
+                // 滑行
+                targetVolume = 0.05 + speed * 0.002;
+                baseFreq = 60 + speed * 2;
+            }
+            // 停止时无声音（targetVolume = 0）
+            
+            // 限制范围
+            targetVolume = Math.min(targetVolume, 0.2);
+            baseFreq = Math.min(baseFreq, 200);
+            
+            // 平滑过渡
+            gain1.gain.linearRampToValueAtTime(targetVolume, currentTime + 0.1);
+            gain2.gain.linearRampToValueAtTime(targetVolume * 0.5, currentTime + 0.1);
+            osc1.frequency.linearRampToValueAtTime(baseFreq, currentTime + 0.1);
+            osc2.frequency.linearRampToValueAtTime(baseFreq * 0.5, currentTime + 0.1);
+        }
+
+        function playBrakeSound() {
+            if (!audioContext) return;
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(200, audioContext.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.3);
+            
+            gain.gain.setValueAtTime(0.05, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+            
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            
+            osc.start();
+            osc.stop(audioContext.currentTime + 0.3);
+        }
+
+        // 急刹车轮胎摩擦音效
+        function playBrakingSound() {
+            if (!audioContext || isBrakingSoundPlaying) return;
+            
+            isBrakingSoundPlaying = true;
+            
+            // 创建白噪音模拟轮胎摩擦
+            const bufferSize = audioContext.sampleRate * 1.5;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            for (let i = 0; i < bufferSize; i++) {
+                const t = i / audioContext.sampleRate;
+                // 衰减的噪音
+                const envelope = Math.exp(-t * 1.5);
+                // 白噪音 + 轻微频率调制
+                const noise = (Math.random() * 2 - 1) * 0.6;
+                const squeal = Math.sin(t * 2000 + Math.sin(t * 50) * 100) * 0.3;
+                data[i] = (noise + squeal) * envelope;
+            }
+            
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            
+            // 高通滤波器让声音更尖锐
+            const highpass = audioContext.createBiquadFilter();
+            highpass.type = 'highpass';
+            highpass.frequency.setValueAtTime(800, audioContext.currentTime);
+            
+            // 音量控制
+            const gainNode = audioContext.createGain();
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1.2);
+            
+            source.connect(highpass);
+            highpass.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            source.start();
+            source.onended = () => {
+                isBrakingSoundPlaying = false;
+            };
+            
+            // 确保状态重置
+            setTimeout(() => {
+                isBrakingSoundPlaying = false;
+            }, 1500);
+        }
+
+        // 撞击音效
+        function playCollisionSound(intensity = 1) {
+            if (!audioContext) return;
+            
+            // 低频撞击声
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(80, audioContext.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.15);
+            
+            gain.gain.setValueAtTime(0.3 * intensity, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.start();
+            osc.stop(audioContext.currentTime + 0.2);
+            
+            // 金属碰撞声
+            const noise = audioContext.createOscillator();
+            const noiseGain = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            noise.type = 'sawtooth';
+            noise.frequency.setValueAtTime(200 + Math.random() * 100, audioContext.currentTime);
+            
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(800, audioContext.currentTime);
+            filter.Q.setValueAtTime(5, audioContext.currentTime);
+            
+            noiseGain.gain.setValueAtTime(0.15 * intensity, audioContext.currentTime);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+            
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(audioContext.destination);
+            noise.start();
+            noise.stop(audioContext.currentTime + 0.15);
+        }
+
+        // ============================================
+        // 天气系统
+        // ============================================
+        
+        // 创建雪花纹理
+        function createSnowflakeTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = 'transparent';
+            ctx.fillRect(0, 0, 64, 64);
+            
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            
+            const cx = 32, cy = 32;
+            
+            // 绘制六角雪花
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(angle);
+                
+                // 主枝
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -26);
+                ctx.stroke();
+                
+                // 小分叉
+                ctx.beginPath();
+                ctx.moveTo(0, -10);
+                ctx.lineTo(-6, -16);
+                ctx.moveTo(0, -10);
+                ctx.lineTo(6, -16);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(0, -18);
+                ctx.lineTo(-4, -22);
+                ctx.moveTo(0, -18);
+                ctx.lineTo(4, -22);
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+        
+        function initWeatherSystem() {
+            // 创建雪花纹理
+            snowflakeTexture = createSnowflakeTexture();
+            
+            // 创建粒子系统用于雨雪
+            const particleCount = 5000;
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+            const settled = new Float32Array(particleCount); // 是否已落地
+            
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 200;
+                positions[i * 3 + 1] = Math.random() * 100;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 200;
+                
+                velocities[i * 3] = 0;
+                velocities[i * 3 + 1] = -1;
+                velocities[i * 3 + 2] = 0;
+                settled[i] = 0;
+            }
+            
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.userData.velocities = velocities;
+            geometry.userData.settled = settled;
+            
+            const material = new THREE.PointsMaterial({
+                color: 0xaaaaaa,
+                size: 0.2,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            weatherParticles = new THREE.Points(geometry, material);
+            weatherParticles.visible = false;
+            scene.add(weatherParticles);
+            
+            // 添加天气UI
+            addWeatherUI();
+            
+            // 创建天体（太阳、月亮、星星、云朵）
+            createCelestialBodies();
+            
+            console.log('🌤️ 天气系统已初始化');
+        }
+
+        function addWeatherUI() {
+            const weatherUI = document.createElement('div');
+            weatherUI.id = 'weatherUI';
+            weatherUI.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 8px 12px;
+                z-index: 1000;
+                background: rgba(0,0,0,0.2);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+            `;
+            weatherUI.innerHTML = `
+                <div style="display:flex;gap:6px;">
+                    <button class="weather-btn active" onclick="setWeather('sunny')" title="Sunny">☀️</button>
+                    <button class="weather-btn" onclick="setWeather('night')" title="Night">🌙</button>
+                    <button class="weather-btn" onclick="setWeather('rain')" title="Rain">🌧️</button>
+                    <button class="weather-btn" onclick="setWeather('storm')" title="Storm">⛈️</button>
+                    <button class="weather-btn" onclick="setWeather('snow')" title="Snow">❄️</button>
+                </div>
+            `;
+            document.body.appendChild(weatherUI);
+        }
+
+        // 天体对象
+        let sunMesh, moonMesh, starsGroup, cloudsGroup;
+        
+        // 创建天体
+        function createCelestialBodies() {
+            // 太阳
+            const sunGeo = new THREE.SphereGeometry(15, 32, 32);
+            const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd00 });
+            sunMesh = new THREE.Mesh(sunGeo, sunMat);
+            sunMesh.position.set(200, 150, -100);
+            scene.add(sunMesh);
+            
+            // 月亮
+            const moonGeo = new THREE.SphereGeometry(10, 32, 32);
+            const moonMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+            moonMesh = new THREE.Mesh(moonGeo, moonMat);
+            moonMesh.position.set(-150, 120, -80);
+            moonMesh.visible = false;
+            scene.add(moonMesh);
+            
+            // 星星
+            starsGroup = new THREE.Group();
+            const starGeo = new THREE.SphereGeometry(0.5, 4, 4);
+            const starMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            for (let i = 0; i < 200; i++) {
+                const star = new THREE.Mesh(starGeo, starMat);
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI * 0.4;
+                const r = 350;
+                star.position.set(
+                    r * Math.sin(phi) * Math.cos(theta),
+                    r * Math.cos(phi) + 50,
+                    r * Math.sin(phi) * Math.sin(theta)
+                );
+                starsGroup.add(star);
+            }
+            starsGroup.visible = false;
+            scene.add(starsGroup);
+            
+            // 烟雾状白云
+            cloudsGroup = new THREE.Group();
+            for (let i = 0; i < 12; i++) {
+                const cloud = new THREE.Group();
+                const puffCount = 15 + Math.floor(Math.random() * 10);
+                
+                for (let j = 0; j < puffCount; j++) {
+                    // 随机大小和透明度，模拟烟雾效果
+                    const size = 3 + Math.random() * 8;
+                    const opacity = 0.15 + Math.random() * 0.25;
+                    
+                    const puffMat = new THREE.MeshBasicMaterial({ 
+                        color: 0xffffff, 
+                        transparent: true, 
+                        opacity: opacity,
+                        depthWrite: false
+                    });
+                    const puffGeo = new THREE.SphereGeometry(size, 6, 6);
+                    const puff = new THREE.Mesh(puffGeo, puffMat);
+                    
+                    // 分散排列形成烟雾状
+                    puff.position.set(
+                        (Math.random() - 0.5) * 50,
+                        (Math.random() - 0.5) * 8,
+                        (Math.random() - 0.5) * 30
+                    );
+                    puff.scale.set(1 + Math.random() * 0.5, 0.6 + Math.random() * 0.3, 1 + Math.random() * 0.5);
+                    cloud.add(puff);
+                }
+                
+                cloud.position.set(
+                    (Math.random() - 0.5) * 500,
+                    70 + Math.random() * 40,
+                    (Math.random() - 0.5) * 500
+                );
+                cloud.rotation.y = Math.random() * Math.PI;
+                cloudsGroup.add(cloud);
+            }
+            scene.add(cloudsGroup);
+        }
+        
+        // 将setWeather暴露到全局作用域（供按钮onclick调用）
+        window.setWeather = function(weather) {
+            currentWeather = weather;
+            const sky = scene.getObjectByName('sky');
+            
+            // 更新按钮状态
+            document.querySelectorAll('.weather-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 控制阴影（只有晴天有阴影）
+            const enableShadows = (weather === 'sunny');
+            scene.traverse(obj => {
+                if (obj.isMesh && obj.castShadow !== undefined) {
+                    obj.castShadow = enableShadows;
+                }
+            });
+            
+            // 隐藏所有天体
+            if (sunMesh) sunMesh.visible = false;
+            if (moonMesh) moonMesh.visible = false;
+            if (starsGroup) starsGroup.visible = false;
+            if (cloudsGroup) {
+                cloudsGroup.visible = false;
+                // 重置云颜色为白色
+                cloudsGroup.children.forEach(c => c.children.forEach(p => {
+                    if (p.material) p.material.color.setHex(0xffffff);
+                }));
+            }
+            
+            // 如果不是下雪天，重置积雪和地面颜色
+            if (weather !== 'snow') {
+                snowAccumulation = 0;
+                const ground = scene.getObjectByName('ground');
+                if (ground && ground.material) {
+                    ground.material.color.setHex(0x2d5a27); // 恢复绿色
+                }
+                // 重置雪花落地状态
+                if (weatherParticles && weatherParticles.geometry.userData.settled) {
+                    const settled = weatherParticles.geometry.userData.settled;
+                    for (let i = 0; i < settled.length; i++) {
+                        settled[i] = 0;
+                    }
+                }
+                // 移除雪花纹理
+                if (weatherParticles && weatherParticles.material) {
+                    weatherParticles.material.map = null;
+                    weatherParticles.material.needsUpdate = true;
+                }
+            }
+            
+            switch (weather) {
+                case 'sunny':
+                    weatherParticles.visible = false;
+                    if (sunMesh) sunMesh.visible = true;
+                    if (cloudsGroup) cloudsGroup.visible = true;
+                    if (sky && sky.material.uniforms) {
+                        sky.material.uniforms.topColor.value.setHex(0x0077ff);
+                        sky.material.uniforms.bottomColor.value.setHex(0xaaddff);
+                    }
+                    scene.traverse(obj => {
+                        if (obj.isAmbientLight) obj.intensity = 0.6;
+                        if (obj.isDirectionalLight) obj.intensity = 1.2;
+                    });
+                    break;
+                    
+                case 'night':
+                    weatherParticles.visible = false;
+                    if (moonMesh) moonMesh.visible = true;
+                    if (starsGroup) starsGroup.visible = true;
+                    if (sky && sky.material.uniforms) {
+                        sky.material.uniforms.topColor.value.setHex(0x0a0a20);
+                        sky.material.uniforms.bottomColor.value.setHex(0x1a1a3a);
+                    }
+                    scene.traverse(obj => {
+                        if (obj.isAmbientLight) obj.intensity = 0.15;
+                        if (obj.isDirectionalLight) obj.intensity = 0.2;
+                    });
+                    break;
+                    
+                case 'rain':
+                    weatherParticles.visible = true;
+                    weatherParticles.material.color.setHex(0x8888ff);
+                    weatherParticles.material.size = 0.15;
+                    if (cloudsGroup) {
+                        cloudsGroup.visible = true;
+                        cloudsGroup.children.forEach(c => c.children.forEach(p => {
+                            if (p.material) p.material.color.setHex(0x555566);
+                        }));
+                    }
+                    if (sky && sky.material.uniforms) {
+                        sky.material.uniforms.topColor.value.setHex(0x445566);
+                        sky.material.uniforms.bottomColor.value.setHex(0x778899);
+                    }
+                    scene.traverse(obj => {
+                        if (obj.isAmbientLight) obj.intensity = 0.4;
+                        if (obj.isDirectionalLight) obj.intensity = 0.5;
+                    });
+                    break;
+                    
+                case 'snow':
+                    weatherParticles.visible = true;
+                    weatherParticles.material.color.setHex(0xffffff);
+                    weatherParticles.material.size = 0.4;
+                    weatherParticles.material.map = snowflakeTexture;
+                    weatherParticles.material.alphaTest = 0.1;
+                    weatherParticles.material.needsUpdate = true;
+                    // 下雪天没有云
+                    if (cloudsGroup) cloudsGroup.visible = false;
+                    if (sky && sky.material.uniforms) {
+                        sky.material.uniforms.topColor.value.setHex(0x8899aa);
+                        sky.material.uniforms.bottomColor.value.setHex(0xddeeff);
+                    }
+                    scene.traverse(obj => {
+                        if (obj.isAmbientLight) obj.intensity = 0.5;
+                        if (obj.isDirectionalLight) obj.intensity = 0.7;
+                    });
+                    // 重置积雪
+                    snowAccumulation = 0;
+                    break;
+                    
+                case 'storm':
+                    weatherParticles.visible = true;
+                    weatherParticles.material.color.setHex(0x6666aa);
+                    weatherParticles.material.size = 0.2;
+                    if (cloudsGroup) {
+                        cloudsGroup.visible = true;
+                        cloudsGroup.children.forEach(c => c.children.forEach(p => {
+                            if (p.material) p.material.color.setHex(0x333344);
+                        }));
+                    }
+                    if (sky && sky.material.uniforms) {
+                        sky.material.uniforms.topColor.value.setHex(0x222233);
+                        sky.material.uniforms.bottomColor.value.setHex(0x445566);
+                    }
+                    scene.traverse(obj => {
+                        if (obj.isAmbientLight) obj.intensity = 0.2;
+                        if (obj.isDirectionalLight) obj.intensity = 0.3;
+                    });
+                    lightningTimer = 0;
+                    break;
+            }
+            
+            console.log(`天气已切换为: ${weather}`);
+        }
+
+        function updateWeather(deltaTime) {
+            if (!weatherParticles || !weatherParticles.visible) return;
+            
+            const positions = weatherParticles.geometry.attributes.position.array;
+            const settled = weatherParticles.geometry.userData.settled;
+            const carPos = chassisBody ? chassisBody.position : { x: 0, z: 0 };
+            
+            // 粒子下落速度
+            let fallSpeed = currentWeather === 'snow' ? 5 : 25;
+            let windX = currentWeather === 'storm' ? Math.sin(Date.now() * 0.001) * 5 : 0;
+            
+            // 雪花轻微飘动
+            const snowDrift = currentWeather === 'snow' ? Math.sin(Date.now() * 0.002) * 0.5 : 0;
+            
+            for (let i = 0; i < positions.length; i += 3) {
+                const idx = i / 3;
+                
+                // 如果雪花已落地，逐渐消失后重置
+                if (currentWeather === 'snow' && settled[idx] > 0) {
+                    settled[idx] += deltaTime;
+                    // 3秒后重置到天上
+                    if (settled[idx] > 3) {
+                        positions[i] = carPos.x + (Math.random() - 0.5) * 150;
+                        positions[i + 1] = 80 + Math.random() * 20;
+                        positions[i + 2] = carPos.z + (Math.random() - 0.5) * 150;
+                        settled[idx] = 0;
+                    }
+                    continue;
+                }
+                
+                positions[i] += (windX + snowDrift) * deltaTime;
+                positions[i + 1] -= fallSpeed * deltaTime;
+                
+                // 到达地面
+                if (positions[i + 1] < 0.1) {
+                    if (currentWeather === 'snow') {
+                        // 雪花落地
+                        positions[i + 1] = 0.05;
+                        settled[idx] = 0.01; // 开始计时
+                        snowAccumulation += 0.0002;
+                        
+                        // 地面逐渐变白
+                        if (snowAccumulation < 1) {
+                            const ground = scene.getObjectByName('ground');
+                            if (ground && ground.material) {
+                                const whiteness = Math.min(snowAccumulation, 0.7);
+                                const r = 0.18 + whiteness * 0.82;
+                                const g = 0.35 + whiteness * 0.65;
+                                const b = 0.15 + whiteness * 0.85;
+                                ground.material.color.setRGB(r, g, b);
+                            }
+                        }
+                    } else {
+                        // 雨水重置到顶部
+                        positions[i] = carPos.x + (Math.random() - 0.5) * 150;
+                        positions[i + 1] = 80 + Math.random() * 20;
+                        positions[i + 2] = carPos.z + (Math.random() - 0.5) * 150;
+                    }
+                }
+            }
+            
+            weatherParticles.geometry.attributes.position.needsUpdate = true;
+            
+            // 暴风雨闪电效果
+            if (currentWeather === 'storm') {
+                lightningTimer += deltaTime;
+                if (lightningTimer > 3 + Math.random() * 5) {
+                    lightning();
+                    lightningTimer = 0;
+                }
+            }
+        }
+
+        // 闪电几何体
+        let lightningBolt = null;
+
+        function createLightningBolt() {
+            // 创建闪电形状
+            const points = [];
+            let x = (Math.random() - 0.5) * 100;
+            let y = 80;
+            let z = (Math.random() - 0.5) * 100;
+            
+            points.push(new THREE.Vector3(x, y, z));
+            
+            // 生成锯齿形闪电路径
+            while (y > 0) {
+                y -= 5 + Math.random() * 10;
+                x += (Math.random() - 0.5) * 15;
+                z += (Math.random() - 0.5) * 15;
+                points.push(new THREE.Vector3(x, Math.max(y, 0), z));
+            }
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({
+                color: 0xffffcc,
+                linewidth: 3,
+                transparent: true,
+                opacity: 1
+            });
+            
+            return new THREE.Line(geometry, material);
+        }
+
+        function lightning() {
+            // 创建闪电视觉效果
+            if (lightningBolt) {
+                scene.remove(lightningBolt);
+            }
+            lightningBolt = createLightningBolt();
+            scene.add(lightningBolt);
+            
+            // 闪电闪烁 + 天空闪白
+            const sky = scene.getObjectByName('sky');
+            let originalTopColor, originalBottomColor;
+            if (sky && sky.material.uniforms) {
+                originalTopColor = sky.material.uniforms.topColor.value.clone();
+                originalBottomColor = sky.material.uniforms.bottomColor.value.clone();
+                sky.material.uniforms.topColor.value.setHex(0xffffff);
+                sky.material.uniforms.bottomColor.value.setHex(0xccccff);
+            }
+            
+            // 环境光闪烁
+            scene.traverse(obj => {
+                if (obj.isAmbientLight) {
+                    const originalIntensity = obj.intensity;
+                    obj.intensity = 3;
+                    setTimeout(() => { obj.intensity = 0.5; }, 80);
+                    setTimeout(() => { obj.intensity = 2.5; }, 120);
+                    setTimeout(() => { obj.intensity = originalIntensity; }, 200);
+                }
+            });
+            
+            // 恢复天空颜色
+            setTimeout(() => {
+                if (sky && sky.material.uniforms && originalTopColor) {
+                    sky.material.uniforms.topColor.value.copy(originalTopColor);
+                    sky.material.uniforms.bottomColor.value.copy(originalBottomColor);
+                }
+            }, 150);
+            
+            // 移除闪电
+            setTimeout(() => {
+                if (lightningBolt) {
+                    scene.remove(lightningBolt);
+                    lightningBolt = null;
+                }
+            }, 200);
+            
+            // 雷声（更真实的多层噪音）
+            if (audioContext) {
+                // 延迟雷声（模拟光速 vs 声速）
+                const delay = 0.3 + Math.random() * 0.5;
+                
+                setTimeout(() => {
+                    // 低频隆隆声
+                    const bufferSize = audioContext.sampleRate * 2;
+                    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    
+                    // 生成雷声波形
+                    for (let i = 0; i < bufferSize; i++) {
+                        const t = i / audioContext.sampleRate;
+                        // 衰减的噪音 + 低频隆隆
+                        const envelope = Math.exp(-t * 2);
+                        const noise = (Math.random() * 2 - 1) * 0.5;
+                        const rumble = Math.sin(t * 30) * 0.3 + Math.sin(t * 50) * 0.2;
+                        data[i] = (noise + rumble) * envelope;
+                    }
+                    
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    
+                    const gainNode = audioContext.createGain();
+                    gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+                    
+                    // 低通滤波器让声音更沉闷
+                    const filter = audioContext.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(400, audioContext.currentTime);
+                    
+                    source.connect(filter);
+                    filter.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    source.start();
+                }, delay * 1000);
+            }
+        }
+
+        // ============================================
+        // 事件监听器
+        // ============================================
+        function setupEventListeners() {
+            // 键盘按下（阻止默认行为避免页面滚动）
+            window.addEventListener('keydown', (e) => {
+                switch (e.code) {
+                    case 'KeyW':
+                    case 'ArrowUp':
+                        controls.forward = true;
+                        e.preventDefault();
+                        break;
+                    case 'KeyS':
+                    case 'ArrowDown':
+                        controls.backward = true;
+                        e.preventDefault();
+                        break;
+                    case 'KeyA':
+                    case 'ArrowLeft':
+                        controls.left = true;
+                        e.preventDefault();
+                        break;
+                    case 'KeyD':
+                    case 'ArrowRight':
+                        controls.right = true;
+                        e.preventDefault();
+                        break;
+                    case 'Space':
+                        controls.brake = true;
+                        e.preventDefault();
+                        break;
+                }
+            });
+
+            // 键盘释放
+            window.addEventListener('keyup', (e) => {
+                switch (e.code) {
+                    case 'KeyW':
+                    case 'ArrowUp':
+                        controls.forward = false;
+                        break;
+                    case 'KeyS':
+                    case 'ArrowDown':
+                        controls.backward = false;
+                        break;
+                    case 'KeyA':
+                    case 'ArrowLeft':
+                        controls.left = false;
+                        break;
+                    case 'KeyD':
+                    case 'ArrowRight':
+                        controls.right = false;
+                        break;
+                    case 'Space':
+                        controls.brake = false;
+                        break;
+                }
+            });
+
+            // 窗口大小调整
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // === 鼠标视角控制 ===
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isMouseDown = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            });
+
+            window.addEventListener('mouseup', () => {
+                isMouseDown = false;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isMouseDown) return;
+                
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                
+                cameraAngleH -= deltaX * 0.008;  // 增加水平灵敏度
+                cameraAngleV += deltaY * 0.008;  // 增加垂直灵敏度
+                
+                // 扩大垂直角度范围（-0.5到1.57，接近完全俯视/仰视）
+                cameraAngleV = Math.max(-0.5, Math.min(1.57, cameraAngleV));
+                
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            });
+
+            // 滚轮缩放
+            renderer.domElement.addEventListener('wheel', (e) => {
+                cameraDistance += e.deltaY * 0.01;
+                cameraDistance = Math.max(5, Math.min(25, cameraDistance));
+                e.preventDefault();
+            }, { passive: false });
+        }
+
+        // ============================================
+        // 更新车辆控制（优化版：平滑转向 + 速度感应）
+        // ============================================
+        function updateVehicleControls() {
+            const maxSteerVal = vehicleConfig.maxSteerVal;
+            const maxForce = vehicleConfig.maxForce;
+            const brakeForce = vehicleConfig.brakeForce;
+
+            // 计算当前速度
+            const velocity = chassisBody.velocity;
+            const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            const speedFactor = Math.max(0.3, 1 - currentSpeed / 50); // 速度越快转向越小
+
+            // 判断车辆前进方向
+            const forwardDir = new THREE.Vector3(0, 0, -1);
+            forwardDir.applyQuaternion(new THREE.Quaternion(
+                chassisBody.quaternion.x,
+                chassisBody.quaternion.y,
+                chassisBody.quaternion.z,
+                chassisBody.quaternion.w
+            ));
+            const movingForward = (velocity.x * forwardDir.x + velocity.z * forwardDir.z) < 0;
+
+            // === 引擎力控制（四轮驱动） ===
+            const speedKmh = currentSpeed * 3.6; // 转换为km/h
+            const maxSpeed = vehicleConfig.maxSpeed || 120;
+            
+            if (controls.forward) {
+                // 清除刹车
+                vehicle.setBrake(0, 0);
+                vehicle.setBrake(0, 1);
+                vehicle.setBrake(0, 2);
+                vehicle.setBrake(0, 3);
+                
+                // 速度限制：接近上限时减小动力
+                let forceMult = 1.0;
+                if (speedKmh > maxSpeed * 0.8) {
+                    forceMult = Math.max(0, 1 - (speedKmh - maxSpeed * 0.8) / (maxSpeed * 0.2));
+                }
+                
+                // 加速：四轮驱动
+                vehicle.applyEngineForce(-maxForce * 0.4 * forceMult, 0);
+                vehicle.applyEngineForce(-maxForce * 0.4 * forceMult, 1);
+                vehicle.applyEngineForce(-maxForce * 0.6 * forceMult, 2);
+                vehicle.applyEngineForce(-maxForce * 0.6 * forceMult, 3);
+            } else if (controls.backward) {
+                // 判断是否需要刹车还是倒车
+                if (movingForward && currentSpeed > 1) {
+                    // 正在前进且速度较快，先刹车
+                    // 四轮均匀制动 + 反向推力稳定车尾
+                    vehicle.applyEngineForce(0, 0);
+                    vehicle.applyEngineForce(0, 1);
+                    // 后轮施加轻微反向力防止翘起
+                    vehicle.applyEngineForce(brakeForce * 0.3, 2);
+                    vehicle.applyEngineForce(brakeForce * 0.3, 3);
+                    // 均匀刹车
+                    vehicle.setBrake(brakeForce * 1.5, 0);
+                    vehicle.setBrake(brakeForce * 1.5, 1);
+                    vehicle.setBrake(brakeForce * 2.0, 2); // 后轮稍多
+                    vehicle.setBrake(brakeForce * 2.0, 3);
+                    
+                    // 急刹车音效
+                    if (speedKmh > 30 && !isBrakingSoundPlaying) {
+                        playBrakingSound();
+                    }
+                } else {
+                    // 倒车：四轮驱动，更流畅
+                    vehicle.setBrake(0, 0);
+                    vehicle.setBrake(0, 1);
+                    vehicle.setBrake(0, 2);
+                    vehicle.setBrake(0, 3);
+                    vehicle.applyEngineForce(maxForce * 0.35, 0);
+                    vehicle.applyEngineForce(maxForce * 0.35, 1);
+                    vehicle.applyEngineForce(maxForce * 0.5, 2);
+                    vehicle.applyEngineForce(maxForce * 0.5, 3);
+                }
+            } else {
+                // 无输入时自然减速
+                vehicle.applyEngineForce(0, 0);
+                vehicle.applyEngineForce(0, 1);
+                vehicle.applyEngineForce(0, 2);
+                vehicle.applyEngineForce(0, 3);
+                
+                // 轻微的引擎制动
+                if (currentSpeed > 0.5) {
+                    vehicle.setBrake(brakeForce * 0.08, 0);
+                    vehicle.setBrake(brakeForce * 0.08, 1);
+                    vehicle.setBrake(brakeForce * 0.08, 2);
+                    vehicle.setBrake(brakeForce * 0.08, 3);
+                } else {
+                    vehicle.setBrake(0, 0);
+                    vehicle.setBrake(0, 1);
+                    vehicle.setBrake(0, 2);
+                    vehicle.setBrake(0, 3);
+                }
+            }
+
+            // === 平滑转向控制 ===
+            let targetSteer = 0;
+            if (controls.left) {
+                targetSteer = maxSteerVal * speedFactor;
+            } else if (controls.right) {
+                targetSteer = -maxSteerVal * speedFactor;
+            }
+
+            // 平滑插值转向值
+            currentSteerVal += (targetSteer - currentSteerVal) * steerSpeed * (currentSpeed > 5 ? 2 : 4);
+            
+            // 回正时加快速度
+            if (targetSteer === 0) {
+                currentSteerVal *= 0.9;
+            }
+            
+            // 应用转向
+            vehicle.setSteeringValue(currentSteerVal, 0);
+            vehicle.setSteeringValue(currentSteerVal, 1);
+
+            // === 手刹控制 ===
+            if (controls.brake) {
+                // 手刹主要锁定后轮
+                vehicle.setBrake(brakeForce * 3, 2);
+                vehicle.setBrake(brakeForce * 3, 3);
+                vehicle.setBrake(brakeForce * 0.5, 0);
+                vehicle.setBrake(brakeForce * 0.5, 1);
+            }
+        }
+
+        // 平滑跟随目标位置（用于消除抖动）
+        let smoothCarPosition = new THREE.Vector3(0, 0, 0);
+        let smoothLookAt = new THREE.Vector3(0, 0, 0);
+        let smoothYaw = 0;
+
+        // ============================================
+        // 相机跟随（鼠标可控制视角）- 防抖动版
+        // ============================================
+        function updateCamera() {
+            if (!chassisBody) return;
+
+            // 俯视图模式
+            if (isTopView) {
+                const topViewHeight = 350;
+                const targetPos = new THREE.Vector3(0, topViewHeight, 0);
+                camera.position.lerp(targetPos, 0.08);
+                camera.lookAt(0, 0, 0);
+                return;
+            }
+
+            // 获取车辆实际位置
+            const actualCarPosition = new THREE.Vector3(
+                chassisBody.position.x,
+                Math.max(chassisBody.position.y, 0.5),
+                chassisBody.position.z
+            );
+
+            // 平滑车辆位置（关键：消除物理引擎的微小抖动）
+            smoothCarPosition.lerp(actualCarPosition, 0.15);
+
+            // 获取车辆水平朝向
+            const carQuat = new THREE.Quaternion(
+                chassisBody.quaternion.x,
+                chassisBody.quaternion.y,
+                chassisBody.quaternion.z,
+                chassisBody.quaternion.w
+            );
+            const carEuler = new THREE.Euler().setFromQuaternion(carQuat, 'YXZ');
+            
+            // 平滑角度变化
+            let targetYaw = carEuler.y;
+            // 处理角度循环（避免从-PI跳到PI时的问题）
+            let yawDiff = targetYaw - smoothYaw;
+            if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+            if (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+            smoothYaw += yawDiff * 0.1;
+
+            // 计算相机位置（球面坐标）
+            const totalAngleH = smoothYaw + cameraAngleH;
+            const cameraX = Math.sin(totalAngleH) * Math.cos(cameraAngleV) * cameraDistance;
+            const cameraY = Math.sin(cameraAngleV) * cameraDistance + 3;
+            const cameraZ = Math.cos(totalAngleH) * Math.cos(cameraAngleV) * cameraDistance;
+
+            const targetCameraPosition = new THREE.Vector3(
+                smoothCarPosition.x + cameraX,
+                smoothCarPosition.y + cameraY,
+                smoothCarPosition.z + cameraZ
+            );
+
+            // 平滑插值相机位置（较大的系数使跟随更紧密）
+            camera.position.lerp(targetCameraPosition, 0.12);
+
+            // 平滑插值lookAt目标
+            const targetLookAt = new THREE.Vector3(
+                smoothCarPosition.x,
+                smoothCarPosition.y + 1,
+                smoothCarPosition.z
+            );
+            smoothLookAt.lerp(targetLookAt, 0.15);
+            
+            camera.lookAt(smoothLookAt);
+        }
+
+        // ============================================
+        // 更新速度显示（圆形仪表盘）
+        // ============================================
+        function updateSpeedDisplay() {
+            if (!chassisBody) return;
+
+            const velocity = chassisBody.velocity;
+            const speed = Math.sqrt(
+                velocity.x * velocity.x +
+                velocity.z * velocity.z
+            );
+            
+            // 转换为 km/h
+            const speedKmh = Math.round(speed * 3.6);
+            const maxSpeed = vehicleConfig.maxSpeed || 120;
+            
+            // 更新数字显示
+            document.getElementById('speedValue').textContent = speedKmh;
+            
+            // 更新指针角度（-135度到135度，共270度范围）
+            const speedRatio = Math.min(speedKmh / maxSpeed, 1);
+            const angle = -135 + speedRatio * 270;
+            const needle = document.getElementById('speedNeedle');
+            if (needle) {
+                needle.setAttribute('transform', `rotate(${angle}, 100, 100)`);
+            }
+            
+            // 更新进度弧（总弧长约400）
+            const arcLength = speedRatio * 400;
+            const speedArc = document.getElementById('speedArc');
+            if (speedArc) {
+                speedArc.setAttribute('stroke-dasharray', `${arcLength} 534`);
+            }
+        }
+
+        // ============================================
+        // 动画循环
+        // ============================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const deltaTime = clock.getDelta();
+
+            // 更新车辆控制
+            updateVehicleControls();
+
+            // 更新物理世界
+            world.step(1 / 60, deltaTime, 3);
+
+            // === 防止翻车：自动扶正 ===
+            const q = chassisBody.quaternion;
+            const euler = new THREE.Euler().setFromQuaternion(
+                new THREE.Quaternion(q.x, q.y, q.z, q.w), 'YXZ'
+            );
+            
+            // 检测是否倾斜过大
+            if (Math.abs(euler.x) > 0.5 || Math.abs(euler.z) > 0.5) {
+                // 逐渐扶正车辆
+                const correctQuat = new CANNON.Quaternion();
+                correctQuat.setFromEuler(0, euler.y, 0); // 只保留Y轴旋转
+                chassisBody.quaternion.slerp(correctQuat, 0.05, chassisBody.quaternion);
+                
+                // 减少角速度
+                chassisBody.angularVelocity.x *= 0.9;
+                chassisBody.angularVelocity.z *= 0.9;
+            }
+            
+            // 限制角速度防止翻转
+            const maxAngularVel = 3;
+            chassisBody.angularVelocity.x = Math.max(-maxAngularVel, Math.min(maxAngularVel, chassisBody.angularVelocity.x));
+            chassisBody.angularVelocity.z = Math.max(-maxAngularVel, Math.min(maxAngularVel, chassisBody.angularVelocity.z));
+
+            // 同步物理体和渲染网格
+            objectsToUpdate.forEach(obj => {
+                obj.mesh.position.copy(obj.body.position);
+                obj.mesh.quaternion.copy(obj.body.quaternion);
+            });
+
+            // 更新轮子并计算地面高度
+            let lowestWheelY = Infinity;
+            for (let i = 0; i < vehicle.wheelInfos.length; i++) {
+                vehicle.updateWheelTransform(i);
+                const transform = vehicle.wheelInfos[i].worldTransform;
+                wheelMeshes[i].position.copy(transform.position);
+                wheelMeshes[i].quaternion.copy(transform.quaternion);
+                // 找到最低轮子位置
+                const wheelBottomY = transform.position.y - vehicleConfig.wheelRadius;
+                if (wheelBottomY < lowestWheelY) {
+                    lowestWheelY = wheelBottomY;
+                }
+            }
+            
+            // Ferrari模型Y偏移（固定值，让轮子贴地）
+            if (carModel) {
+                carModel.position.y = -0.75;
+            }
+            
+            // 更新Ferrari模型的轮子旋转
+            if (ferrariWheels.length > 0) {
+                // 计算车速
+                const velocity = chassisBody.velocity;
+                const speed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+                
+                // 轮子旋转速度（根据车速）
+                const wheelRotationSpeed = speed * deltaTime * 3;
+                
+                // 获取前轮转向角度
+                const steerAngle = currentSteerVal;
+                
+                ferrariWheels.forEach((wheel, index) => {
+                    // 根据车辆前进方向决定旋转方向
+                    const forward = new THREE.Vector3(0, 0, 1);
+                    forward.applyQuaternion(chassisBody.quaternion);
+                    const dot = velocity.x * forward.x + velocity.z * forward.z;
+                    const direction = dot >= 0 ? 1 : -1;
+                    
+                    // 轮子绕X轴旋转（滚动）
+                    wheel.rotation.x += wheelRotationSpeed * direction;
+                    
+                    // 前轮转向（通常前两个是前轮）
+                    const wheelName = wheel.name.toLowerCase();
+                    if (wheelName.includes('front') || wheelName.includes('fl') || wheelName.includes('fr')) {
+                        wheel.rotation.y = steerAngle;
+                    }
+                });
+            }
+
+            // 树木碰撞检测和晃动效果
+            const carX = chassisBody.position.x;
+            const carZ = chassisBody.position.z;
+            const carSpeed = Math.sqrt(chassisBody.velocity.x ** 2 + chassisBody.velocity.z ** 2);
+            const currentTime = Date.now();
+            
+            trees.forEach(tree => {
+                // 检测碰撞（增大检测半径，因为物理引擎会阻止车辆靠近）
+                const dx = carX - tree.x;
+                const dz = carZ - tree.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                // 检测半径 = 树干半径 + 车身宽度，速度阈值降低
+                if (dist < 3.5 && carSpeed > 1 && currentTime - lastCollisionTime > 300) {
+                    // 触发碰撞
+                    tree.shakeTime = 1.0;
+                    lastCollisionTime = currentTime;
+                    
+                    // 播放撞击音效
+                    const intensity = Math.min(carSpeed / 8, 1);
+                    playCollisionSound(intensity);
+                    console.log('💥 撞击树木！速度:', carSpeed.toFixed(1), '距离:', dist.toFixed(1));
+                }
+                
+                // 更新晃动效果
+                if (tree.shakeTime > 0) {
+                    tree.shakeTime -= deltaTime * 2;
+                    const shake = Math.sin(tree.shakeTime * 30) * tree.shakeTime * 0.15;
+                    tree.group.rotation.x = shake;
+                    tree.group.rotation.z = shake * 0.7;
+                } else {
+                    // 恢复原位
+                    tree.group.rotation.x *= 0.9;
+                    tree.group.rotation.z *= 0.9;
+                }
+            });
+
+            // 更新相机
+            updateCamera();
+
+            // 更新速度显示
+            updateSpeedDisplay();
+
+            // 更新音效
+            const velocity = chassisBody.velocity;
+            const speed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            updateEngineSound(speed, controls.forward, controls.backward, controls.brake);
+
+            // 更新鱼的游动
+            fishes.forEach(fish => {
+                // 随机转向
+                fish.angle += (Math.random() - 0.5) * fish.turnSpeed * deltaTime;
+                
+                // 计算新位置
+                const localX = fish.mesh.position.x + Math.cos(fish.angle) * fish.speed * deltaTime;
+                const localZ = fish.mesh.position.z + Math.sin(fish.angle) * fish.speed * deltaTime;
+                
+                // 检查是否超出湖泊范围
+                const dist = Math.sqrt(localX * localX + localZ * localZ);
+                if (dist > fish.lakeRadius) {
+                    // 转向朝向湖中心
+                    fish.angle = Math.atan2(-localZ, -localX) + (Math.random() - 0.5) * 0.5;
+                } else {
+                    fish.mesh.position.x = localX;
+                    fish.mesh.position.z = localZ;
+                }
+                
+                // 鱼朝向移动方向
+                fish.mesh.rotation.y = -fish.angle + Math.PI / 2;
+                
+                // 鱼尾摆动
+                fish.tailWag += deltaTime * 10;
+                fish.mesh.rotation.z = Math.sin(fish.tailWag) * 0.1;
+            });
+
+            // 云朵慢速飘动
+            if (cloudsGroup && cloudsGroup.visible) {
+                cloudsGroup.children.forEach((cloud, i) => {
+                    // 每朵云有不同的速度
+                    const speed = 2 + (i % 3);
+                    cloud.position.x += speed * deltaTime;
+                    
+                    // 超出范围后循环
+                    if (cloud.position.x > 300) {
+                        cloud.position.x = -300;
+                    }
+                });
+            }
+
+            // 更新天气
+            updateWeather(deltaTime);
+
+            // 渲染
+            renderer.render(scene, camera);
+        }
+
+        // ============================================
+        // 启动应用
+        // ============================================
+        init();
+    </script>
+</body>
+</html>
