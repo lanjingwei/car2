@@ -203,41 +203,6 @@
             z-index: 1000;
         }
         
-        /* 虚拟摇杆（已弃用，改用方向键） */
-        #joystickArea {
-            display: none;
-        }
-        
-        /* 刹车按钮 */
-        #brakeBtn {
-            position: absolute;
-            right: 30px;
-            bottom: 80px;
-            width: 80px;
-            height: 80px;
-            background: rgba(255,100,100,0.3);
-            border: 3px solid rgba(255,100,100,0.5);
-            border-radius: 50%;
-            color: white;
-            font-size: 12px;
-            font-weight: bold;
-            pointer-events: auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: none;
-        }
-        #brakeBtn.active {
-            background: rgba(255,100,100,0.7);
-            border-color: rgba(255,150,150,0.8);
-        }
-        
-        /* 加速按钮（已弃用，使用方向键上） */
-        #gasBtn {
-            display: none;
-        }
         
         /* 移动端适配 */
         @media (max-width: 768px), (pointer: coarse) {
@@ -248,10 +213,10 @@
                 display: none !important;
             }
             #speedometer {
-                transform: scale(0.5);
+                transform: scale(0.25);
                 transform-origin: top left;
-                top: 15px;
-                left: 15px;
+                top: 10px;
+                left: 10px;
                 bottom: auto;
                 right: auto;
             }
@@ -263,24 +228,28 @@
             }
         }
         
-        /* 移动端方向键样式 */
-        #dpadContainer {
+        /* 移动端方向键样式 - 水平布局 */
+        .mobile-btn-group {
             position: absolute;
-            left: 30px;
             bottom: 30px;
-            width: 150px;
-            height: 150px;
+            display: flex;
+            gap: 10px;
             pointer-events: auto;
         }
+        #leftBtnGroup {
+            left: 20px;
+        }
+        #rightBtnGroup {
+            right: 20px;
+        }
         .dpad-btn {
-            position: absolute;
-            width: 50px;
-            height: 50px;
+            width: 60px;
+            height: 60px;
             background: rgba(255,255,255,0.2);
             border: 2px solid rgba(255,255,255,0.4);
-            border-radius: 10px;
+            border-radius: 12px;
             color: white;
-            font-size: 20px;
+            font-size: 22px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -292,10 +261,6 @@
             background: rgba(0,212,170,0.5);
             border-color: rgba(0,212,170,0.8);
         }
-        #dpadUp { top: 0; left: 50px; }
-        #dpadDown { bottom: 0; left: 50px; }
-        #dpadLeft { top: 50px; left: 0; }
-        #dpadRight { top: 50px; right: 0; }
     </style>
 </head>
 <body>
@@ -312,13 +277,16 @@
     
     <!-- 移动端控制 -->
     <div id="mobileControls">
-        <div id="dpadContainer">
-            <div id="dpadUp" class="dpad-btn">▲</div>
+        <!-- 左下角：前进后退 -->
+        <div id="leftBtnGroup" class="mobile-btn-group">
             <div id="dpadDown" class="dpad-btn">▼</div>
+            <div id="dpadUp" class="dpad-btn">▲</div>
+        </div>
+        <!-- 右下角：左右转向 -->
+        <div id="rightBtnGroup" class="mobile-btn-group">
             <div id="dpadLeft" class="dpad-btn">◀</div>
             <div id="dpadRight" class="dpad-btn">▶</div>
         </div>
-        <div id="brakeBtn">BRAKE</div>
     </div>
     <div id="speedometer" style="display: none;">
         <svg viewBox="0 0 200 200">
@@ -3275,20 +3243,29 @@
             setupMobileControls();
         }
         
-        // 移动端控制设置（方向键版本）
+        // 移动端控制设置（方向键版本 + 手势视角控制）
         function setupMobileControls() {
             const dpadUp = document.getElementById('dpadUp');
             const dpadDown = document.getElementById('dpadDown');
             const dpadLeft = document.getElementById('dpadLeft');
             const dpadRight = document.getElementById('dpadRight');
-            const brakeBtn = document.getElementById('brakeBtn');
             
             if (!dpadUp) return;
+            
+            // 初始化音效系统（手机端首次触摸时初始化）
+            let mobileAudioInitialized = false;
+            const initMobileAudio = () => {
+                if (!mobileAudioInitialized) {
+                    initAudioSystem();
+                    mobileAudioInitialized = true;
+                }
+            };
             
             // 方向键通用处理函数
             function setupDpadButton(btn, controlKey) {
                 btn.addEventListener('touchstart', (e) => {
                     e.preventDefault();
+                    initMobileAudio(); // 首次触摸时初始化音效
                     controls[controlKey] = true;
                     btn.classList.add('active');
                 }, { passive: false });
@@ -3311,25 +3288,48 @@
             setupDpadButton(dpadLeft, 'left');
             setupDpadButton(dpadRight, 'right');
             
-            // 刹车按钮
-            brakeBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                controls.brake = true;
-                brakeBtn.classList.add('active');
-            }, { passive: false });
+            // === 手势控制视角 ===
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let isSwiping = false;
             
-            brakeBtn.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                controls.brake = false;
-                brakeBtn.classList.remove('active');
-            }, { passive: false });
+            // 在画布上添加触摸事件用于控制视角
+            renderer.domElement.addEventListener('touchstart', (e) => {
+                // 排除按钮区域
+                if (e.target.closest('#mobileControls')) return;
+                
+                initMobileAudio(); // 首次触摸时初始化音效
+                
+                if (e.touches.length === 1) {
+                    isSwiping = true;
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                }
+            }, { passive: true });
             
-            brakeBtn.addEventListener('touchcancel', (e) => {
-                controls.brake = false;
-                brakeBtn.classList.remove('active');
-            });
+            renderer.domElement.addEventListener('touchmove', (e) => {
+                if (!isSwiping || e.touches.length !== 1) return;
+                
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - touchStartX;
+                const deltaY = touch.clientY - touchStartY;
+                
+                // 更新相机角度（灵敏度调整）
+                cameraAngleH -= deltaX * 0.008;
+                cameraAngleV += deltaY * 0.005;
+                
+                // 限制垂直角度
+                cameraAngleV = Math.max(0.1, Math.min(1.2, cameraAngleV));
+                
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+            }, { passive: true });
             
-            // 阻止默认触摸行为（防止页面滚动）
+            renderer.domElement.addEventListener('touchend', () => {
+                isSwiping = false;
+            }, { passive: true });
+            
+            // 阻止按钮区域的默认触摸行为（防止页面滚动）
             document.addEventListener('touchmove', (e) => {
                 if (e.target.closest('#mobileControls')) {
                     e.preventDefault();
