@@ -483,8 +483,8 @@
                 0.1,
                 1000
             );
-            // 设置相机初始位置在车辆后方（车辆初始位置在-127, 1, -127，朝向 Math.PI * 0.75）
-            camera.position.set(-127 + 8, 10, -127 + 8);
+            // 设置相机初始位置在车辆后方（车辆初始位置在圆心，朝向X正方向）
+            camera.position.set(-15, 10, 0);
 
             // 创建渲染器（支持物理材质）
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1070,9 +1070,9 @@
                 material: new CANNON.Material('chassis')
             });
             chassisBody.addShape(chassisShape);
-            // 初始位置在乾卦广告牌附近的道路上（西北方向）
-            chassisBody.position.set(-127, 1, -127);
-            chassisBody.quaternion.setFromEuler(0, Math.PI * 0.75, 0); // 车头朝向道路方向
+            // 初始位置在圆心，车头沿着道路方向
+            chassisBody.position.set(0, 1, 0);
+            chassisBody.quaternion.setFromEuler(0, Math.PI / 2, 0); // 车头朝向X正方向（沿道路）
 
             // ---- 创建RaycastVehicle ----
             vehicle = new CANNON.RaycastVehicle({
@@ -1245,10 +1245,12 @@
                 const z = Math.sin(angle) * dist;
                 attempts++;
                 
-                // 避开出生点、道路和湖泊
+                // 避开出生点、道路、湖泊和欢迎文字区域
                 if (Math.abs(x) < safeZone && Math.abs(z) < safeZone) continue;
                 if (isOnRoad(x, z)) continue;
                 if (isInLake(x, z)) continue;
+                // 避开欢迎文字区域（x: -30到30, z: -35到-5）
+                if (x > -35 && x < 35 && z > -40 && z < 0) continue;
                 
                 createTree(x, z);
                 treeCount++;
@@ -1262,13 +1264,410 @@
             console.log('🏙️ 地图生成完成！');
             
             // 创建3D立体文字
-            create3DText();
+            // create3DText(); // 已删除八卦广告牌旁的英文字母
+            createWelcomeText();
+            createGroundInstructions();
+            createPortals(); // 创建传送门
+        }
+        
+        // 创建中文欢迎文字（3D立体效果，类似BRUNO风格）
+        function createWelcomeText() {
+            const text = '欢迎光临兰的空间';
+            const textGroup = new THREE.Group();
+            
+            const planeWidth = 50;
+            const planeHeight = 6;
+            const depth = 2.5; // 立体深度
+            const layers = 80; // 更多层数让侧面更实
+            
+            // 创建不同亮度的纹理层（模拟光照渐变）
+            function createTextCanvas(color, shadowOffset = 0) {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 1024;
+                canvas.height = 128;
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 添加阴影效果
+                if (shadowOffset > 0) {
+                    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                    ctx.shadowBlur = 2;
+                    ctx.shadowOffsetX = shadowOffset;
+                    ctx.shadowOffsetY = shadowOffset;
+                }
+                
+                ctx.fillStyle = color;
+                ctx.font = 'bold 90px "Microsoft YaHei", "SimHei", "Helvetica Neue", Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+                
+                return canvas;
+            }
+            
+            // 创建前面（最亮）
+            const frontCanvas = createTextCanvas('#ffffff', 2);
+            const frontTexture = new THREE.CanvasTexture(frontCanvas);
+            
+            // 创建中间层（渐变灰色）
+            const textures = [];
+            for (let i = 0; i < 5; i++) {
+                const brightness = Math.floor(220 - i * 25); // 从亮到暗
+                const color = `rgb(${brightness},${brightness},${brightness})`;
+                const canvas = createTextCanvas(color, 0);
+                textures.push(new THREE.CanvasTexture(canvas));
+            }
+            
+            // 创建每一层
+            for (let i = 0; i < layers; i++) {
+                const progress = i / (layers - 1); // 0到1
+                
+                let texture;
+                if (i === layers - 1) {
+                    // 最前面 - 纯白
+                    texture = frontTexture;
+                } else {
+                    // 根据深度选择渐变纹理
+                    const texIndex = Math.min(Math.floor(progress * 5), 4);
+                    texture = textures[texIndex];
+                }
+                
+                const material = new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    alphaTest: 0.5,
+                    side: THREE.DoubleSide,
+                    depthWrite: true
+                });
+                
+                const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                // 从后往前排列，模拟立体深度
+                mesh.position.z = progress * depth - depth;
+                mesh.position.x = -progress * 0.8; // 轻微X偏移模拟透视
+                mesh.position.y = -progress * 0.3; // 轻微Y偏移模拟阴影
+                
+                textGroup.add(mesh);
+            }
+            
+            // 放置在车旁边的空地上，底端紧贴地面，倾斜一点角度
+            textGroup.position.set(0, planeHeight / 2 + 0.5, -22);
+            textGroup.rotation.x = -0.1; // 轻微前倾
+            textGroup.rotation.y = 0.15; // 轻微侧转，增加立体感
+            
+            scene.add(textGroup);
+        }
+        
+        // 创建地面操作说明（印在地面上）
+        function createGroundInstructions() {
+            const instructions = [
+                { key: 'W / ↑', desc: '前进', keyWidth: 80 },
+                { key: 'S / ↓', desc: '后退', keyWidth: 80 },
+                { key: 'A / ←', desc: '左转', keyWidth: 80 },
+                { key: 'D / →', desc: '右转', keyWidth: 80 },
+                { key: 'SPACE', desc: '刹车', keyWidth: 100 },
+                { key: '鼠标', desc: '视角', keyWidth: 80 }
+            ];
+            
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 512;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制每一行操作说明
+            const startY = 60;
+            const lineHeight = 70;
+            
+            instructions.forEach((item, index) => {
+                const y = startY + index * lineHeight;
+                
+                // 绘制按键框
+                ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                const boxX = 80;
+                const boxWidth = item.keyWidth;
+                ctx.roundRect(boxX, y - 22, boxWidth, 44, 8);
+                ctx.stroke();
+                
+                // 绘制按键文字
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                ctx.font = 'bold 24px "Microsoft YaHei", Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(item.key, boxX + boxWidth / 2, y);
+                
+                // 绘制说明文字
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.font = 'bold 28px "Microsoft YaHei", Arial, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText(item.desc, boxX + boxWidth + 30, y);
+            });
+            
+            // 创建纹理
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            
+            // 创建地面平面（水平放置）
+            const geometry = new THREE.PlaneGeometry(18, 18);
+            const material = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                opacity: 0.9,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            
+            const mesh = new THREE.Mesh(geometry, material);
+            
+            // 放置在欢迎文字右边的空地上（避开道路）
+            mesh.position.set(35, 0.1, -28); // 在"空间"字样右边的空地
+            mesh.rotation.x = -Math.PI / 2; // 水平放置
+            mesh.rotation.z = 0.2; // 轻微旋转增加视觉效果
+            
+            scene.add(mesh);
         }
         
         // 3D文字物理体存储
         const textBodies = [];
         const textMeshes = [];
         const portalRings = [];
+        
+        // 传送门数据存储
+        const portals = [];
+        const portalParticles = [];
+        
+        // 创建旋转粒子传送门
+        function createPortals() {
+            // 传送门位置设置在道路圆环内侧空地上（避开道路半径~127）
+            const portalConfigs = [
+                { x: 60, z: 60, url: 'https://lanjingwei.github.io/game/', label: 'GAME' },
+                { x: -60, z: 60, url: 'https://lanjingwei.github.io/music/', label: 'MUSIC' },
+                { x: 60, z: -60, url: 'https://lanjingwei.github.io/mx/', label: '命理' },
+                { x: -60, z: -60, url: 'https://lanjingwei.github.io/bzml/', label: '八字' }
+            ];
+            
+            portalConfigs.forEach(config => {
+                createSinglePortal(config.x, config.z, config.url, config.label);
+            });
+        }
+        
+        function createSinglePortal(x, z, url, label) {
+            const portalGroup = new THREE.Group();
+            portalGroup.position.set(x, 0, z);
+            
+            const portalRadius = 5;
+            const portalHeight = 8;
+            
+            // 传送门中心高度（向地面移动30%）
+            const portalCenterY = (portalRadius + 1) * 0.7;
+            
+            // 外环（紫色光环）
+            const outerRingGeo = new THREE.TorusGeometry(portalRadius, 0.4, 16, 64);
+            const outerRingMat = new THREE.MeshBasicMaterial({ 
+                color: 0x9932cc,
+                transparent: true,
+                opacity: 0.9
+            });
+            const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
+            outerRing.position.y = portalCenterY;
+            portalGroup.add(outerRing);
+            
+            // 内环（亮紫色能量）
+            const innerRingGeo = new THREE.TorusGeometry(portalRadius - 0.8, 0.3, 16, 64);
+            const innerRingMat = new THREE.MeshBasicMaterial({ 
+                color: 0xda70d6,
+                transparent: true,
+                opacity: 0.8
+            });
+            const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
+            innerRing.position.y = portalCenterY;
+            portalGroup.add(innerRing);
+            
+            // 中心漩涡（半透明紫色圆盘）
+            const vortexGeo = new THREE.CircleGeometry(portalRadius - 1.2, 32);
+            const vortexMat = new THREE.MeshBasicMaterial({
+                color: 0x8a2be2,
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.DoubleSide
+            });
+            const vortex = new THREE.Mesh(vortexGeo, vortexMat);
+            vortex.position.y = portalCenterY;
+            portalGroup.add(vortex);
+            
+            // 创建旋转粒子系统
+            const particleCount = 200;
+            const particleGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            const sizes = new Float32Array(particleCount);
+            const angles = new Float32Array(particleCount);
+            const radii = new Float32Array(particleCount);
+            const speeds = new Float32Array(particleCount);
+            
+            const centerY = portalCenterY; // 垂直传送门中心高度（已向地面移动30%）
+            
+            for (let i = 0; i < particleCount; i++) {
+                angles[i] = Math.random() * Math.PI * 2;
+                radii[i] = portalRadius * 0.6 + Math.random() * portalRadius * 0.6;
+                speeds[i] = 0.8 + Math.random() * 1.5;
+                
+                // 粒子在垂直平面上（XY平面）旋转
+                positions[i * 3] = Math.cos(angles[i]) * radii[i];
+                positions[i * 3 + 1] = centerY + Math.sin(angles[i]) * radii[i];
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 1; // Z轴轻微偏移
+                
+                // 紫色到粉色的粒子
+                const colorMix = Math.random();
+                colors[i * 3] = 0.6 + colorMix * 0.4;
+                colors[i * 3 + 1] = 0.2 + colorMix * 0.3;
+                colors[i * 3 + 2] = 0.8 + colorMix * 0.2;
+                
+                sizes[i] = 0.15 + Math.random() * 0.35;
+            }
+            
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            particleGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            
+            const particleMat = new THREE.PointsMaterial({
+                size: 0.3,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            const particles = new THREE.Points(particleGeo, particleMat);
+            portalGroup.add(particles);
+            
+            // 存储粒子动画数据
+            portalParticles.push({
+                particles: particles,
+                angles: angles,
+                radii: radii,
+                speeds: speeds,
+                centerY: centerY
+            });
+            
+            // 创建标签
+            const labelCanvas = document.createElement('canvas');
+            const labelCtx = labelCanvas.getContext('2d');
+            labelCanvas.width = 256;
+            labelCanvas.height = 64;
+            labelCtx.fillStyle = '#da70d6';
+            labelCtx.font = 'bold 40px "Microsoft YaHei", Arial';
+            labelCtx.textAlign = 'center';
+            labelCtx.textBaseline = 'middle';
+            labelCtx.fillText(label, 128, 32);
+            
+            const labelTexture = new THREE.CanvasTexture(labelCanvas);
+            const labelGeo = new THREE.PlaneGeometry(5, 1.2);
+            const labelMat = new THREE.MeshBasicMaterial({
+                map: labelTexture,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+            const labelMesh = new THREE.Mesh(labelGeo, labelMat);
+            labelMesh.position.y = portalCenterY + portalRadius + 1.5; // 标签在传送门上方
+            portalGroup.add(labelMesh);
+            
+            scene.add(portalGroup);
+            
+            // 存储传送门数据用于碰撞检测
+            portals.push({
+                group: portalGroup,
+                x: x,
+                z: z,
+                radius: portalRadius,
+                height: portalHeight,
+                url: url,
+                outerRing: outerRing,
+                innerRing: innerRing,
+                vortex: vortex,
+                triggered: false
+            });
+        }
+        
+        // 更新传送门动画
+        function updatePortals(deltaTime) {
+            const time = performance.now() * 0.001;
+            
+            // 更新粒子旋转（在垂直XY平面上）
+            portalParticles.forEach(data => {
+                const positions = data.particles.geometry.attributes.position.array;
+                const particleCount = data.angles.length;
+                
+                for (let i = 0; i < particleCount; i++) {
+                    data.angles[i] += data.speeds[i] * deltaTime * 2;
+                    
+                    // 粒子在垂直平面（XY）上旋转
+                    positions[i * 3] = Math.cos(data.angles[i]) * data.radii[i];
+                    positions[i * 3 + 1] = data.centerY + Math.sin(data.angles[i]) * data.radii[i];
+                    positions[i * 3 + 2] = Math.sin(time * 2 + i * 0.1) * 0.5; // Z轴轻微波动
+                }
+                
+                data.particles.geometry.attributes.position.needsUpdate = true;
+            });
+            
+            // 更新环的旋转和脉动
+            portals.forEach(portal => {
+                portal.outerRing.rotation.z += deltaTime * 0.5;
+                portal.innerRing.rotation.z -= deltaTime * 0.8;
+                portal.vortex.rotation.z += deltaTime * 1.2;
+                
+                // 脉动效果
+                const pulse = 1 + Math.sin(time * 3) * 0.1;
+                portal.outerRing.scale.setScalar(pulse);
+                portal.vortex.material.opacity = 0.4 + Math.sin(time * 2) * 0.2;
+            });
+        }
+        
+        // 检测传送门碰撞
+        function checkPortalCollision() {
+            if (!chassisBody) return;
+            
+            const carX = chassisBody.position.x;
+            const carZ = chassisBody.position.z;
+            
+            portals.forEach(portal => {
+                if (portal.triggered) return;
+                
+                const dx = carX - portal.x;
+                const dz = carZ - portal.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                // 当车辆进入传送门一半距离时触发
+                if (dist < portal.radius * 0.5) {
+                    portal.triggered = true;
+                    console.log('🌀 进入传送门！跳转到:', portal.url);
+                    
+                    // 添加过渡效果
+                    const overlay = document.createElement('div');
+                    overlay.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: radial-gradient(circle, #4488ff 0%, #000 100%);
+                        opacity: 0;
+                        z-index: 9999;
+                        transition: opacity 0.5s;
+                    `;
+                    document.body.appendChild(overlay);
+                    
+                    setTimeout(() => overlay.style.opacity = '1', 10);
+                    setTimeout(() => window.location.href = portal.url, 600);
+                }
+            });
+        }
         
         // 创建3D立体白色文字（带物理和传送门）
         function create3DText() {
@@ -3463,10 +3862,10 @@
         }
 
         // 平滑跟随目标位置（用于消除抖动）
-        // 初始化为车辆初始位置，避免相机从原点缓慢移动到车辆位置导致开始时看不到车
-        let smoothCarPosition = new THREE.Vector3(-127, 1, -127);
-        let smoothLookAt = new THREE.Vector3(-127, 2, -127);
-        let smoothYaw = Math.PI * 0.75; // 与车辆初始朝向一致
+        // 初始化为车辆初始位置（圆心），避免相机从原点缓慢移动到车辆位置导致开始时看不到车
+        let smoothCarPosition = new THREE.Vector3(0, 1, 0);
+        let smoothLookAt = new THREE.Vector3(0, 2, 0);
+        let smoothYaw = Math.PI / 2; // 与车辆初始朝向一致（沿道路）
 
         // ============================================
         // 相机跟随（鼠标可控制视角）- 防抖动版
@@ -3610,6 +4009,8 @@
 
             // 更新3D文字物理和传送门动画
             updateTextPhysics();
+            updatePortals(deltaTime); // 更新传送门动画
+            checkPortalCollision(); // 检测传送门碰撞
             
             // 同步物理体和渲染网格
             objectsToUpdate.forEach(obj => {
