@@ -213,12 +213,12 @@
                 display: none !important;
             }
             #speedometer {
-                transform: scale(0.25);
-                transform-origin: top left;
+                transform: scale(0.375);
+                transform-origin: top right;
                 top: 10px;
-                left: 10px;
+                right: 10px;
+                left: auto;
                 bottom: auto;
-                right: auto;
             }
             #weatherUI {
                 display: none !important;
@@ -243,13 +243,12 @@
             right: 20px;
         }
         .dpad-btn {
-            width: 60px;
-            height: 60px;
-            background: rgba(255,255,255,0.2);
-            border: 2px solid rgba(255,255,255,0.4);
-            border-radius: 12px;
-            color: white;
-            font-size: 22px;
+            width: 55px;
+            height: 55px;
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.4);
+            font-size: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -258,8 +257,7 @@
             touch-action: none;
         }
         .dpad-btn:active, .dpad-btn.active {
-            background: rgba(0,212,170,0.5);
-            border-color: rgba(0,212,170,0.8);
+            color: rgba(0,212,170,0.7);
         }
     </style>
 </head>
@@ -279,8 +277,8 @@
     <div id="mobileControls">
         <!-- 左下角：前进后退 -->
         <div id="leftBtnGroup" class="mobile-btn-group">
-            <div id="dpadDown" class="dpad-btn">▼</div>
             <div id="dpadUp" class="dpad-btn">▲</div>
+            <div id="dpadDown" class="dpad-btn">▼</div>
         </div>
         <!-- 右下角：左右转向 -->
         <div id="rightBtnGroup" class="mobile-btn-group">
