@@ -203,51 +203,23 @@
             z-index: 1000;
         }
         
-        /* 虚拟摇杆 */
+        /* 虚拟摇杆（已弃用，改用方向键） */
         #joystickArea {
-            position: absolute;
-            left: 30px;
-            bottom: 30px;
-            width: 140px;
-            height: 140px;
-            pointer-events: auto;
-        }
-        #joystickBase {
-            width: 140px;
-            height: 140px;
-            background: rgba(255,255,255,0.15);
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            position: relative;
-        }
-        #joystickThumb {
-            width: 60px;
-            height: 60px;
-            background: rgba(255,255,255,0.4);
-            border: 2px solid rgba(255,255,255,0.6);
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            transition: background 0.1s;
-        }
-        #joystickThumb.active {
-            background: rgba(0,212,170,0.6);
+            display: none;
         }
         
         /* 刹车按钮 */
         #brakeBtn {
             position: absolute;
             right: 30px;
-            bottom: 30px;
-            width: 100px;
-            height: 100px;
+            bottom: 80px;
+            width: 80px;
+            height: 80px;
             background: rgba(255,100,100,0.3);
             border: 3px solid rgba(255,100,100,0.5);
             border-radius: 50%;
             color: white;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
             pointer-events: auto;
             display: flex;
@@ -255,35 +227,16 @@
             justify-content: center;
             user-select: none;
             -webkit-user-select: none;
+            touch-action: none;
         }
         #brakeBtn.active {
             background: rgba(255,100,100,0.7);
             border-color: rgba(255,150,150,0.8);
         }
         
-        /* 加速按钮 */
+        /* 加速按钮（已弃用，使用方向键上） */
         #gasBtn {
-            position: absolute;
-            right: 150px;
-            bottom: 30px;
-            width: 100px;
-            height: 100px;
-            background: rgba(100,200,100,0.3);
-            border: 3px solid rgba(100,200,100,0.5);
-            border-radius: 50%;
-            color: white;
-            font-size: 14px;
-            font-weight: bold;
-            pointer-events: auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        #gasBtn.active {
-            background: rgba(100,200,100,0.7);
-            border-color: rgba(150,255,150,0.8);
+            display: none;
         }
         
         /* 移动端适配 */
@@ -295,10 +248,54 @@
                 display: none !important;
             }
             #speedometer {
-                transform: scale(0.7);
-                transform-origin: bottom right;
+                transform: scale(0.5);
+                transform-origin: top left;
+                top: 15px;
+                left: 15px;
+                bottom: auto;
+                right: auto;
+            }
+            #weatherUI {
+                display: none !important;
+            }
+            #topViewBtn {
+                display: none !important;
             }
         }
+        
+        /* 移动端方向键样式 */
+        #dpadContainer {
+            position: absolute;
+            left: 30px;
+            bottom: 30px;
+            width: 150px;
+            height: 150px;
+            pointer-events: auto;
+        }
+        .dpad-btn {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.4);
+            border-radius: 10px;
+            color: white;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        .dpad-btn:active, .dpad-btn.active {
+            background: rgba(0,212,170,0.5);
+            border-color: rgba(0,212,170,0.8);
+        }
+        #dpadUp { top: 0; left: 50px; }
+        #dpadDown { bottom: 0; left: 50px; }
+        #dpadLeft { top: 50px; left: 0; }
+        #dpadRight { top: 50px; right: 0; }
     </style>
 </head>
 <body>
@@ -315,13 +312,13 @@
     
     <!-- 移动端控制 -->
     <div id="mobileControls">
-        <div id="joystickArea">
-            <div id="joystickBase">
-                <div id="joystickThumb"></div>
-            </div>
+        <div id="dpadContainer">
+            <div id="dpadUp" class="dpad-btn">▲</div>
+            <div id="dpadDown" class="dpad-btn">▼</div>
+            <div id="dpadLeft" class="dpad-btn">◀</div>
+            <div id="dpadRight" class="dpad-btn">▶</div>
         </div>
-        <div id="gasBtn">GO</div>
-        <div id="brakeBtn">STOP</div>
+        <div id="brakeBtn">BRAKE</div>
     </div>
     <div id="speedometer" style="display: none;">
         <svg viewBox="0 0 200 200">
@@ -405,6 +402,8 @@
         import * as CANNON from 'cannon-es';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
         // ============================================
         // 全局变量
@@ -495,6 +494,10 @@
         const trees = [];
         let lastCollisionTime = 0;
         
+        // 存储金属底座用于碰撞检测
+        const metalBases = [];
+        let lastMetalCollisionTime = 0;
+        
         // 存储湖中的鱼
         const fishes = [];
 
@@ -514,7 +517,8 @@
                 0.1,
                 1000
             );
-            camera.position.set(0, 10, 20);
+            // 设置相机初始位置在车辆后方（车辆初始位置在-127, 1, -127，朝向 Math.PI * 0.75）
+            camera.position.set(-127 + 8, 10, -127 + 8);
 
             // 创建渲染器（支持物理材质）
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -877,6 +881,9 @@
                 base.castShadow = true;
                 base.receiveShadow = true;
                 scene.add(base);
+                
+                // 存储底座位置用于金属碰撞检测
+                metalBases.push({ x: x, z: z, radius: 3.5 });
                 
                 // 单支撑杆
                 const poleMat = new THREE.MeshStandardMaterial({ 
@@ -1287,6 +1294,163 @@
             }
 
             console.log('🏙️ 地图生成完成！');
+            
+            // 创建3D立体文字
+            create3DText();
+        }
+        
+        // 3D文字物理体存储
+        const textBodies = [];
+        const textMeshes = [];
+        const portalRings = [];
+        
+        // 创建3D立体白色文字（带物理和传送门）
+        function create3DText() {
+            const fontLoader = new FontLoader();
+            
+            // 加载字体
+            fontLoader.load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', (font) => {
+                const textMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    roughness: 0.3,
+                    metalness: 0.1
+                });
+                
+                // 文字配置（远离道路的位置）
+                const texts = [
+                    { text: 'GAME', x: 140, z: 140, rotY: -Math.PI / 4, scale: 0.6 },
+                    { text: 'MUSIC', x: -140, z: 140, rotY: Math.PI / 4, scale: 0.5 },
+                    { text: 'BAZI', x: 140, z: -140, rotY: Math.PI / 4, scale: 0.5 },
+                    { text: 'MINGLI', x: -140, z: -140, rotY: -Math.PI / 4, scale: 0.45 }
+                ];
+                
+                texts.forEach(config => {
+                    const letterSpacing = 3 * config.scale;
+                    let offsetX = 0;
+                    
+                    // 创建时空隧道圆环（在首字母前）
+                    createPortalRing(config.x, config.z, config.rotY, config.scale);
+                    
+                    // 为每个字母创建独立的mesh和物理体
+                    for (let i = 0; i < config.text.length; i++) {
+                        const char = config.text[i];
+                        if (char === ' ') {
+                            offsetX += letterSpacing;
+                            continue;
+                        }
+                        
+                        const charGeometry = new TextGeometry(char, {
+                            font: font,
+                            size: 3 * config.scale,
+                            height: 0.5,
+                            curveSegments: 8,
+                            bevelEnabled: true,
+                            bevelThickness: 0.05,
+                            bevelSize: 0.03,
+                            bevelOffset: 0,
+                            bevelSegments: 2
+                        });
+                        
+                        charGeometry.computeBoundingBox();
+                        const charWidth = charGeometry.boundingBox.max.x - charGeometry.boundingBox.min.x;
+                        const charHeight = charGeometry.boundingBox.max.y - charGeometry.boundingBox.min.y;
+                        
+                        const charMesh = new THREE.Mesh(charGeometry, textMaterial.clone());
+                        
+                        // 计算位置（考虑旋转）
+                        const localX = offsetX - (config.text.length * letterSpacing) / 2 + 8;
+                        const worldX = config.x + localX * Math.cos(config.rotY);
+                        const worldZ = config.z + localX * Math.sin(config.rotY);
+                        
+                        charMesh.position.set(worldX, charHeight / 2, worldZ);
+                        charMesh.rotation.set(0, config.rotY, 0);
+                        charMesh.castShadow = true;
+                        charMesh.receiveShadow = true;
+                        scene.add(charMesh);
+                        textMeshes.push(charMesh);
+                        
+                        // 创建物理体
+                        const charBody = new CANNON.Body({
+                            mass: 5,  // 可被撞倒
+                            position: new CANNON.Vec3(worldX, charHeight / 2, worldZ),
+                            shape: new CANNON.Box(new CANNON.Vec3(charWidth / 2, charHeight / 2, 0.3)),
+                            linearDamping: 0.5,
+                            angularDamping: 0.5
+                        });
+                        charBody.quaternion.setFromEuler(0, config.rotY, 0);
+                        world.addBody(charBody);
+                        textBodies.push(charBody);
+                        
+                        offsetX += charWidth + letterSpacing * 0.5;
+                    }
+                });
+                
+                console.log('🔤 3D文字已创建（带物理引擎）');
+            });
+        }
+        
+        // 创建时空隧道圆环
+        function createPortalRing(x, z, rotY, scale) {
+            const ringGroup = new THREE.Group();
+            
+            // 外圈发光环
+            const outerRingGeo = new THREE.TorusGeometry(4 * scale, 0.3 * scale, 16, 48);
+            const outerRingMat = new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.8
+            });
+            const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
+            ringGroup.add(outerRing);
+            
+            // 内圈
+            const innerRingGeo = new THREE.TorusGeometry(3 * scale, 0.2 * scale, 16, 48);
+            const innerRingMat = new THREE.MeshBasicMaterial({
+                color: 0x8844ff,
+                transparent: true,
+                opacity: 0.6
+            });
+            const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
+            ringGroup.add(innerRing);
+            
+            // 中心漩涡效果
+            const spiralGeo = new THREE.CircleGeometry(2.5 * scale, 32);
+            const spiralMat = new THREE.MeshBasicMaterial({
+                color: 0x000022,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            const spiral = new THREE.Mesh(spiralGeo, spiralMat);
+            ringGroup.add(spiral);
+            
+            // 位置在文字前方
+            const portalX = x - 10 * Math.cos(rotY);
+            const portalZ = z - 10 * Math.sin(rotY);
+            ringGroup.position.set(portalX, 3 * scale, portalZ);
+            ringGroup.rotation.set(0, rotY + Math.PI / 2, 0);
+            
+            scene.add(ringGroup);
+            portalRings.push({ group: ringGroup, outer: outerRing, inner: innerRing });
+        }
+        
+        // 更新3D文字物理
+        function updateTextPhysics() {
+            for (let i = 0; i < textBodies.length; i++) {
+                if (textMeshes[i] && textBodies[i]) {
+                    textMeshes[i].position.copy(textBodies[i].position);
+                    textMeshes[i].quaternion.copy(textBodies[i].quaternion);
+                }
+            }
+            
+            // 旋转传送门
+            const time = Date.now() * 0.001;
+            portalRings.forEach((portal, i) => {
+                portal.outer.rotation.z = time * 0.5;
+                portal.inner.rotation.z = -time * 0.8;
+                // 脉冲发光效果
+                portal.outer.material.opacity = 0.6 + Math.sin(time * 2 + i) * 0.2;
+            });
         }
 
         // 加载外部环境模型
@@ -2310,7 +2474,7 @@
             osc.frequency.setValueAtTime(80, audioContext.currentTime);
             osc.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.15);
             
-            gain.gain.setValueAtTime(0.3 * intensity, audioContext.currentTime);
+            gain.gain.setValueAtTime(1.6 * intensity, audioContext.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
             
             osc.connect(gain);
@@ -2330,7 +2494,7 @@
             filter.frequency.setValueAtTime(800, audioContext.currentTime);
             filter.Q.setValueAtTime(5, audioContext.currentTime);
             
-            noiseGain.gain.setValueAtTime(0.15 * intensity, audioContext.currentTime);
+            noiseGain.gain.setValueAtTime(1.0 * intensity, audioContext.currentTime);
             noiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
             
             noise.connect(filter);
@@ -2338,6 +2502,64 @@
             noiseGain.connect(audioContext.destination);
             noise.start();
             noise.stop(audioContext.currentTime + 0.15);
+        }
+
+        // 金属撞击音效（撞击底座时使用）
+        function playMetalCollisionSound(intensity = 1) {
+            if (!audioContext) return;
+            
+            // 金属撞击的主音（高频金属声）
+            const osc1 = audioContext.createOscillator();
+            const gain1 = audioContext.createGain();
+            
+            osc1.type = 'square';
+            osc1.frequency.setValueAtTime(800 + Math.random() * 200, audioContext.currentTime);
+            osc1.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.15);
+            
+            gain1.gain.setValueAtTime(1.6 * intensity, audioContext.currentTime);
+            gain1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.25);
+            
+            osc1.connect(gain1);
+            gain1.connect(audioContext.destination);
+            osc1.start();
+            osc1.stop(audioContext.currentTime + 0.25);
+            
+            // 金属共振声（模拟金属震动）
+            const osc2 = audioContext.createOscillator();
+            const gain2 = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            osc2.type = 'sawtooth';
+            osc2.frequency.setValueAtTime(1200 + Math.random() * 300, audioContext.currentTime);
+            
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(2000, audioContext.currentTime);
+            filter.Q.setValueAtTime(10, audioContext.currentTime);
+            
+            gain2.gain.setValueAtTime(1.0 * intensity, audioContext.currentTime);
+            gain2.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+            
+            osc2.connect(filter);
+            filter.connect(gain2);
+            gain2.connect(audioContext.destination);
+            osc2.start();
+            osc2.stop(audioContext.currentTime + 0.3);
+            
+            // 低频撞击感
+            const osc3 = audioContext.createOscillator();
+            const gain3 = audioContext.createGain();
+            
+            osc3.type = 'sine';
+            osc3.frequency.setValueAtTime(150, audioContext.currentTime);
+            osc3.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+            
+            gain3.gain.setValueAtTime(1.6 * intensity, audioContext.currentTime);
+            gain3.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            
+            osc3.connect(gain3);
+            gain3.connect(audioContext.destination);
+            osc3.start();
+            osc3.stop(audioContext.currentTime + 0.15);
         }
 
         // ============================================
@@ -3053,97 +3275,41 @@
             setupMobileControls();
         }
         
-        // 移动端控制设置
+        // 移动端控制设置（方向键版本）
         function setupMobileControls() {
-            const joystickArea = document.getElementById('joystickArea');
-            const joystickThumb = document.getElementById('joystickThumb');
-            const gasBtn = document.getElementById('gasBtn');
+            const dpadUp = document.getElementById('dpadUp');
+            const dpadDown = document.getElementById('dpadDown');
+            const dpadLeft = document.getElementById('dpadLeft');
+            const dpadRight = document.getElementById('dpadRight');
             const brakeBtn = document.getElementById('brakeBtn');
             
-            if (!joystickArea) return;
+            if (!dpadUp) return;
             
-            let joystickActive = false;
-            let joystickStartX = 0;
-            let joystickStartY = 0;
-            const joystickRadius = 40; // 摇杆移动范围
+            // 方向键通用处理函数
+            function setupDpadButton(btn, controlKey) {
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    controls[controlKey] = true;
+                    btn.classList.add('active');
+                }, { passive: false });
+                
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    controls[controlKey] = false;
+                    btn.classList.remove('active');
+                }, { passive: false });
+                
+                btn.addEventListener('touchcancel', (e) => {
+                    controls[controlKey] = false;
+                    btn.classList.remove('active');
+                });
+            }
             
-            // 摇杆触摸开始
-            joystickArea.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                joystickActive = true;
-                joystickThumb.classList.add('active');
-                const touch = e.touches[0];
-                const rect = joystickArea.getBoundingClientRect();
-                joystickStartX = rect.left + rect.width / 2;
-                joystickStartY = rect.top + rect.height / 2;
-            }, { passive: false });
-            
-            // 摇杆触摸移动
-            window.addEventListener('touchmove', (e) => {
-                if (!joystickActive) return;
-                
-                const touch = e.touches[0];
-                let deltaX = touch.clientX - joystickStartX;
-                let deltaY = touch.clientY - joystickStartY;
-                
-                // 限制摇杆范围
-                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-                if (distance > joystickRadius) {
-                    deltaX = (deltaX / distance) * joystickRadius;
-                    deltaY = (deltaY / distance) * joystickRadius;
-                }
-                
-                // 更新摇杆位置
-                joystickThumb.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
-                
-                // 计算方向输入（归一化到 -1 到 1）
-                const normalX = deltaX / joystickRadius;
-                const normalY = deltaY / joystickRadius;
-                
-                // 左右转向
-                controls.left = normalX < -0.3;
-                controls.right = normalX > 0.3;
-                
-                // 前后移动
-                controls.forward = normalY < -0.3;
-                controls.backward = normalY > 0.3;
-            }, { passive: false });
-            
-            // 摇杆触摸结束
-            window.addEventListener('touchend', (e) => {
-                // 检查是否还有触摸点在摇杆上
-                let stillTouching = false;
-                for (let touch of e.touches) {
-                    const rect = joystickArea.getBoundingClientRect();
-                    if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
-                        touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
-                        stillTouching = true;
-                        break;
-                    }
-                }
-                
-                if (!stillTouching && joystickActive) {
-                    joystickActive = false;
-                    joystickThumb.classList.remove('active');
-                    joystickThumb.style.transform = 'translate(-50%, -50%)';
-                    controls.forward = false;
-                    controls.backward = false;
-                    controls.left = false;
-                    controls.right = false;
-                }
-            });
-            
-            // 加速按钮
-            gasBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                controls.forward = true;
-                gasBtn.classList.add('active');
-            }, { passive: false });
-            
-            gasBtn.addEventListener('touchend', (e) => {
-                controls.forward = false;
-                gasBtn.classList.remove('active');
-            });
+            // 设置四个方向键
+            setupDpadButton(dpadUp, 'forward');
+            setupDpadButton(dpadDown, 'backward');
+            setupDpadButton(dpadLeft, 'left');
+            setupDpadButton(dpadRight, 'right');
             
             // 刹车按钮
             brakeBtn.addEventListener('touchstart', (e) => {
@@ -3153,6 +3319,12 @@
             }, { passive: false });
             
             brakeBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                controls.brake = false;
+                brakeBtn.classList.remove('active');
+            }, { passive: false });
+            
+            brakeBtn.addEventListener('touchcancel', (e) => {
                 controls.brake = false;
                 brakeBtn.classList.remove('active');
             });
@@ -3293,9 +3465,10 @@
         }
 
         // 平滑跟随目标位置（用于消除抖动）
-        let smoothCarPosition = new THREE.Vector3(0, 0, 0);
-        let smoothLookAt = new THREE.Vector3(0, 0, 0);
-        let smoothYaw = 0;
+        // 初始化为车辆初始位置，避免相机从原点缓慢移动到车辆位置导致开始时看不到车
+        let smoothCarPosition = new THREE.Vector3(-127, 1, -127);
+        let smoothLookAt = new THREE.Vector3(-127, 2, -127);
+        let smoothYaw = Math.PI * 0.75; // 与车辆初始朝向一致
 
         // ============================================
         // 相机跟随（鼠标可控制视角）- 防抖动版
@@ -3437,6 +3610,9 @@
             chassisBody.angularVelocity.x = Math.max(-maxAngularVel, Math.min(maxAngularVel, chassisBody.angularVelocity.x));
             chassisBody.angularVelocity.z = Math.max(-maxAngularVel, Math.min(maxAngularVel, chassisBody.angularVelocity.z));
 
+            // 更新3D文字物理和传送门动画
+            updateTextPhysics();
+            
             // 同步物理体和渲染网格
             objectsToUpdate.forEach(obj => {
                 obj.mesh.position.copy(obj.body.position);
@@ -3526,6 +3702,20 @@
                     // 恢复原位
                     tree.group.rotation.x *= 0.9;
                     tree.group.rotation.z *= 0.9;
+                }
+            });
+
+            // 金属底座碰撞检测
+            metalBases.forEach(base => {
+                const dx = carX - base.x;
+                const dz = carZ - base.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < base.radius && carSpeed > 1 && currentTime - lastMetalCollisionTime > 300) {
+                    lastMetalCollisionTime = currentTime;
+                    const intensity = Math.min(carSpeed / 6, 1);
+                    playMetalCollisionSound(intensity);
+                    console.log('🔩 撞击金属底座！速度:', carSpeed.toFixed(1));
                 }
             });
 
