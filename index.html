@@ -446,8 +446,11 @@
 
         // 相机控制参数（鼠标视角）
         let cameraAngleH = 0;  // 水平角度（无限制，可360度旋转）
-        let cameraAngleV = 0.4; // 垂直角度
+        let cameraAngleV = 0.4; // 垂直角度（PC端默认）
         let cameraDistance = 12; // 相机距离
+        
+        // 检测是否为移动端
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.matchMedia('(pointer: coarse)').matches;
         let isMouseDown = false;
         let lastMouseX = 0;
         let lastMouseY = 0;
@@ -485,6 +488,12 @@
             );
             // 设置相机初始位置在车辆后方（车辆初始位置在圆心，朝向X正方向）
             camera.position.set(-15, 10, 0);
+            
+            // 移动端设置更高的初始俯视角度
+            if (isMobile) {
+                cameraAngleV = 0.85; // 更高的俯视角度
+                cameraDistance = 18; // 稍远的距离
+            }
 
             // 创建渲染器（支持物理材质）
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -3691,6 +3700,10 @@
             let isSwiping = false;
             
             // 在画布上添加触摸事件用于控制视角
+            // 双指缩放变量
+            let initialPinchDistance = 0;
+            let isPinching = false;
+            
             renderer.domElement.addEventListener('touchstart', (e) => {
                 // 排除按钮区域
                 if (e.target.closest('#mobileControls')) return;
@@ -3699,31 +3712,58 @@
                 
                 if (e.touches.length === 1) {
                     isSwiping = true;
+                    isPinching = false;
                     touchStartX = e.touches[0].clientX;
                     touchStartY = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    // 双指缩放开始
+                    isSwiping = false;
+                    isPinching = true;
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
                 }
             }, { passive: true });
             
             renderer.domElement.addEventListener('touchmove', (e) => {
-                if (!isSwiping || e.touches.length !== 1) return;
-                
-                const touch = e.touches[0];
-                const deltaX = touch.clientX - touchStartX;
-                const deltaY = touch.clientY - touchStartY;
-                
-                // 更新相机角度（灵敏度调整）
-                cameraAngleH -= deltaX * 0.008;
-                cameraAngleV += deltaY * 0.005;
-                
-                // 限制垂直角度
-                cameraAngleV = Math.max(0.1, Math.min(1.2, cameraAngleV));
-                
-                touchStartX = touch.clientX;
-                touchStartY = touch.clientY;
+                if (e.touches.length === 1 && isSwiping && !isPinching) {
+                    // 单指拖动视角
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - touchStartX;
+                    const deltaY = touch.clientY - touchStartY;
+                    
+                    // 更新相机角度（灵敏度调整）
+                    cameraAngleH -= deltaX * 0.008;
+                    cameraAngleV += deltaY * 0.005;
+                    
+                    // 限制垂直角度
+                    cameraAngleV = Math.max(0.1, Math.min(1.2, cameraAngleV));
+                    
+                    touchStartX = touch.clientX;
+                    touchStartY = touch.clientY;
+                } else if (e.touches.length === 2 && isPinching) {
+                    // 双指缩放
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const currentPinchDistance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (initialPinchDistance > 0) {
+                        const pinchDelta = (initialPinchDistance - currentPinchDistance) * 0.05;
+                        cameraDistance += pinchDelta;
+                        cameraDistance = Math.max(5, Math.min(25, cameraDistance));
+                    }
+                    
+                    initialPinchDistance = currentPinchDistance;
+                }
             }, { passive: true });
             
-            renderer.domElement.addEventListener('touchend', () => {
-                isSwiping = false;
+            renderer.domElement.addEventListener('touchend', (e) => {
+                if (e.touches.length < 2) {
+                    isPinching = false;
+                }
+                if (e.touches.length === 0) {
+                    isSwiping = false;
+                }
             }, { passive: true });
             
             // 阻止按钮区域的默认触摸行为（防止页面滚动）
